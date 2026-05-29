@@ -1,0 +1,60 @@
+[project]
+name = "wholesale-agent"
+version = "0.1.0"
+description = "AI Order Desk — a LangGraph agent that turns messy restaurant supply orders into clean, supplier-split draft carts."
+readme = "README.md"
+requires-python = ">=3.11"
+# Core deps are intentionally tiny: the domain layer is Pydantic-only and the
+# deterministic core has no LLM/embedding dependencies. Everything that needs an
+# API key or a heavy model lives in the optional `agent` extra below, so
+# `uv sync` + `make test` stay fast and keyless.
+dependencies = [
+    "pydantic>=2",
+    "python-dotenv>=1",
+]
+
+[project.optional-dependencies]
+# The agent runtime (LLM nodes, RAG, UI). Installed with `make setup-agent`.
+# Deferred this slice — declared here so later slices don't re-touch this file.
+agent = [
+    "langgraph>=0.2",
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langchain-google-genai>=2",
+    "langchain-community>=0.3",
+    "langchain-huggingface>=0.1",
+    "faiss-cpu>=1.8",
+    "sentence-transformers>=3",
+    "langsmith>=0.1",
+    "gradio>=4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+# This is an application, not a library — don't try to build/install the project
+# itself. We import via `src.` with pytest's `pythonpath = ["."]` (see below).
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["test", "evals"]
+markers = [
+    "integration: tests that exercise real adapters (FAISS, real embedder)",
+    "e2e: full-pipeline tests (real retriever + tools + graph)",
+    "eval: tests that hit a real LLM and cost money/time (skipped by default)",
+]
+# Evals hit a real LLM — skip them by default, run explicitly with `pytest -m eval`.
+addopts = "-m 'not eval'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
