@@ -48,6 +48,8 @@ def _apply_one(by_supplier: dict[str, list[LineItem]], op: CartOp) -> None:
             merged = (items[idx].quantity or 0) + (item.quantity or 0)
             items[idx] = items[idx].model_copy(update={"quantity": merged})
     elif op.op is CartOpKind.SET_QUANTITY:
+        if item.quantity is None:
+            return  # a set_quantity must carry a quantity; never null an existing line
         if idx is None:
             items.append(item)
         else:

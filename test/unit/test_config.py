@@ -26,7 +26,7 @@ def _isolate_settings_cache():
     get_settings.cache_clear()
 
 
-def test_defaults_apply_when_env_absent(monkeypatch):
+def test_applies_defaults_when_env_vars_are_absent(monkeypatch):
     for var in _ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     s = get_settings()
@@ -37,7 +37,7 @@ def test_defaults_apply_when_env_absent(monkeypatch):
     assert s.langsmith_tracing is False
 
 
-def test_env_overrides_win(monkeypatch):
+def test_env_vars_override_the_defaults(monkeypatch):
     monkeypatch.setenv("GEMINI_MODEL", "gemini-test")
     monkeypatch.setenv("GOOGLE_API_KEY", "key-123")
     monkeypatch.setenv("LANGSMITH_TRACING", "true")
@@ -47,11 +47,11 @@ def test_env_overrides_win(monkeypatch):
     assert s.langsmith_tracing is True
 
 
-def test_blank_api_key_normalized_to_none(monkeypatch):
+def test_normalizes_a_blank_api_key_to_none(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "")
     assert get_settings().google_api_key is None
 
 
-def test_settings_are_cached(monkeypatch):
+def test_returns_a_cached_instance_on_repeated_calls(monkeypatch):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
     assert get_settings() is get_settings()

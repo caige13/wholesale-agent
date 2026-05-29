@@ -34,7 +34,7 @@ def _deli_line(quantity: int = 3) -> LineItem:
     )
 
 
-def test_handle_turn_delegates_message_and_cart_to_agent():
+def test_delegates_the_message_and_cart_to_the_agent():
     cart = Cart()
     agent = FakeOrderAgent(AgentResult(draft_cart=cart))
     handle_turn("2 cases of straws", cart, agent)
@@ -46,7 +46,7 @@ def test_returns_a_turn_result():
     assert isinstance(handle_turn("hi", Cart(), agent), TurnResult)
 
 
-def test_question_path_returns_answer_and_preserves_cart():
+def test_returns_the_answer_and_preserves_the_cart_on_a_question_turn():
     cart = Cart(by_supplier={"acme-foodservice": [_deli_line(2)]})
     agent = FakeOrderAgent(AgentResult(draft_cart=cart, answer="Each case has 500 units."))
     result = handle_turn("how many per case?", cart, agent)
@@ -54,7 +54,7 @@ def test_question_path_returns_answer_and_preserves_cart():
     assert result.cart == cart  # §11: a question turn must not blank the cart panel
 
 
-def test_clarification_path_surfaces_the_question():
+def test_surfaces_the_question_on_a_clarification_turn():
     agent = FakeOrderAgent(
         AgentResult(
             draft_cart=Cart(),
@@ -66,7 +66,7 @@ def test_clarification_path_surfaces_the_question():
     assert result.cart == Cart()
 
 
-def test_order_path_mirrors_cart_and_summarizes_it():
+def test_mirrors_the_cart_and_summarizes_it_on_an_order_turn():
     new_cart = Cart(by_supplier={"acme-foodservice": [_deli_line(3)]})
     agent = FakeOrderAgent(AgentResult(draft_cart=new_cart))
     result = handle_turn("3 cases of 16oz deli", Cart(), agent)
@@ -75,8 +75,29 @@ def test_order_path_mirrors_cart_and_summarizes_it():
     assert "3" in result.reply
 
 
-def test_empty_cart_still_yields_a_nonempty_reply():
+def test_yields_a_nonempty_reply_even_when_the_cart_is_empty():
     agent = FakeOrderAgent(AgentResult(draft_cart=Cart()))
     result = handle_turn("hello", Cart(), agent)
     assert result.cart == Cart()
     assert result.reply.strip()
+
+
+def test_whitespace_only_answer_falls_through_instead_of_blanking_reply():
+    # A whitespace-only string is truthy in Python, so a blank answer would sail
+    # past `if result.answer` and become an empty chat bubble. It must be treated
+    # as "no answer" and fall through to the cart summary instead.
+    cart = Cart(by_supplier={"acme-foodservice": [_deli_line(3)]})
+    agent = FakeOrderAgent(AgentResult(draft_cart=cart, answer="  \n "))
+    result = handle_turn("how many per case?", cart, agent)
+    assert result.reply.strip()  # never a blank bubble
+    assert "16oz Deli Container" in result.reply  # blank answer -> shows the cart
+
+
+def test_summarizes_a_partial_line_without_printing_none():
+    # An unresolved line (no product_name, no quantity) must not render as the
+    # literal "None × None"; it falls back to the sku as a label.
+    cart = Cart(by_supplier={"acme-foodservice": [LineItem(sku="DELI-16")]})
+    agent = FakeOrderAgent(AgentResult(draft_cart=cart))
+    result = handle_turn("...", cart, agent)
+    assert "None" not in result.reply
+    assert "DELI-16" in result.reply

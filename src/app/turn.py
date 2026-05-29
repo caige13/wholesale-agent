@@ -12,6 +12,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from src.domain.cart import Cart
+from src.domain.models import LineItem
 from src.ports.order_agent import AgentResult, OrderAgent
 
 
@@ -32,8 +33,9 @@ def _compose_reply(result: AgentResult) -> str:
     """Pick the one thing to say this turn: an answer, a clarifying question, or
     a draft summary. Order matters — a pending question or answer trumps the cart.
     """
-    if result.answer:
-        return result.answer
+    answer = (result.answer or "").strip()
+    if answer:
+        return answer
     if result.clarifications:
         return "\n".join(result.clarifications)
     return _summarize_cart(result.draft_cart)
@@ -42,5 +44,14 @@ def _compose_reply(result: AgentResult) -> str:
 def _summarize_cart(cart: Cart) -> str:
     if cart.is_empty():
         return "Your cart is empty — tell me what you'd like to order."
-    rendered = "\n".join(f"- {item.quantity} × {item.product_name}" for item in cart.all_lines())
+    rendered = "\n".join(_render_line(item) for item in cart.all_lines())
     return "Here's your draft order:\n" + rendered
+
+
+def _render_line(item: LineItem) -> str:
+    """Render one cart line, degrading gracefully for a not-yet-resolved line so
+    a missing name/quantity never surfaces as the literal "None"."""
+    label = item.product_name or item.sku or "item"
+    if item.quantity is None:
+        return f"- {label}"
+    return f"- {item.quantity} × {label}"
