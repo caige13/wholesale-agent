@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.domain.models import Cart
+from src.domain.cart import Cart
 from src.ports.order_agent import AgentResult, OrderAgent
 
 
@@ -19,7 +19,7 @@ class TurnResult(BaseModel):
     """What the front-end renders for one turn: a chat reply and the cart to show."""
 
     reply: str
-    cart: Cart = Field(default_factory=dict)
+    cart: Cart = Field(default_factory=Cart)
 
 
 def handle_turn(message: str, cart: Cart, agent: OrderAgent) -> TurnResult:
@@ -40,8 +40,7 @@ def _compose_reply(result: AgentResult) -> str:
 
 
 def _summarize_cart(cart: Cart) -> str:
-    lines = [item for items in cart.values() for item in items]
-    if not lines:
+    if cart.is_empty():
         return "Your cart is empty — tell me what you'd like to order."
-    rendered = "\n".join(f"- {item.quantity} × {item.product_name}" for item in lines)
+    rendered = "\n".join(f"- {item.quantity} × {item.product_name}" for item in cart.all_lines())
     return "Here's your draft order:\n" + rendered

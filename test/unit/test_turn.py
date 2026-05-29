@@ -8,6 +8,7 @@ on a question turn (spec §11). The inner agent is stubbed; its contract
 """
 
 from src.app.turn import TurnResult, handle_turn
+from src.domain.cart import Cart
 from src.domain.models import LineItem
 from src.ports.order_agent import AgentResult
 
@@ -17,9 +18,9 @@ class FakeOrderAgent:
 
     def __init__(self, result: AgentResult):
         self._result = result
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, Cart]] = []
 
-    def run(self, message: str, cart: dict) -> AgentResult:
+    def run(self, message: str, cart: Cart) -> AgentResult:
         self.calls.append((message, cart))
         return self._result
 
@@ -34,19 +35,19 @@ def _deli_line(quantity: int = 3) -> LineItem:
 
 
 def test_handle_turn_delegates_message_and_cart_to_agent():
-    cart = {}
+    cart = Cart()
     agent = FakeOrderAgent(AgentResult(draft_cart=cart))
     handle_turn("2 cases of straws", cart, agent)
-    assert agent.calls == [("2 cases of straws", {})]
+    assert agent.calls == [("2 cases of straws", Cart())]
 
 
 def test_returns_a_turn_result():
-    agent = FakeOrderAgent(AgentResult(draft_cart={}))
-    assert isinstance(handle_turn("hi", {}, agent), TurnResult)
+    agent = FakeOrderAgent(AgentResult(draft_cart=Cart()))
+    assert isinstance(handle_turn("hi", Cart(), agent), TurnResult)
 
 
 def test_question_path_returns_answer_and_preserves_cart():
-    cart = {"acme-foodservice": [_deli_line(2)]}
+    cart = Cart(by_supplier={"acme-foodservice": [_deli_line(2)]})
     agent = FakeOrderAgent(AgentResult(draft_cart=cart, answer="Each case has 500 units."))
     result = handle_turn("how many per case?", cart, agent)
     assert result.reply == "Each case has 500 units."
@@ -56,26 +57,26 @@ def test_question_path_returns_answer_and_preserves_cart():
 def test_clarification_path_surfaces_the_question():
     agent = FakeOrderAgent(
         AgentResult(
-            draft_cart={},
+            draft_cart=Cart(),
             clarifications=["What size deli containers — 8, 16, or 32oz?"],
         )
     )
-    result = handle_turn("I need deli containers", {}, agent)
+    result = handle_turn("I need deli containers", Cart(), agent)
     assert "What size deli containers" in result.reply
-    assert result.cart == {}
+    assert result.cart == Cart()
 
 
 def test_order_path_mirrors_cart_and_summarizes_it():
-    new_cart = {"acme-foodservice": [_deli_line(3)]}
+    new_cart = Cart(by_supplier={"acme-foodservice": [_deli_line(3)]})
     agent = FakeOrderAgent(AgentResult(draft_cart=new_cart))
-    result = handle_turn("3 cases of 16oz deli", {}, agent)
+    result = handle_turn("3 cases of 16oz deli", Cart(), agent)
     assert result.cart == new_cart
     assert "16oz Deli Container" in result.reply
     assert "3" in result.reply
 
 
 def test_empty_cart_still_yields_a_nonempty_reply():
-    agent = FakeOrderAgent(AgentResult(draft_cart={}))
-    result = handle_turn("hello", {}, agent)
-    assert result.cart == {}
+    agent = FakeOrderAgent(AgentResult(draft_cart=Cart()))
+    result = handle_turn("hello", Cart(), agent)
+    assert result.cart == Cart()
     assert result.reply.strip()

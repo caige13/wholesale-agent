@@ -12,6 +12,8 @@ preserved design.
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 
@@ -63,7 +65,18 @@ class LineItem(BaseModel):
     unit_price: float | None = None
 
 
-# The running draft order, keyed by supplier. Persists across turns; the UI
-# mirrors it as a thin display of this graph-owned state (supplier-keyed from
-# day 1 = Stage-2 seam).
-Cart = dict[str, list[LineItem]]
+class CartOpKind(StrEnum):
+    """The three mutations the agent can apply to the running cart."""
+
+    ADD = "add"
+    SET_QUANTITY = "set_quantity"
+    REMOVE = "remove"
+
+
+class CartOp(BaseModel):
+    """One mutation against the cart. ``item``'s (supplier, sku) identifies the
+    target line for set_quantity / remove.
+    """
+
+    op: CartOpKind
+    item: LineItem

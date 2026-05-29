@@ -12,7 +12,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from src.domain.models import Cart
+from src.domain.cart import Cart
 
 
 class AgentResult(BaseModel):
@@ -23,7 +23,7 @@ class AgentResult(BaseModel):
     full (persisted) cart after this turn — unchanged on a question turn.
     """
 
-    draft_cart: Cart = Field(default_factory=dict)
+    draft_cart: Cart = Field(default_factory=Cart)
     clarifications: list[str] = Field(default_factory=list)
     answer: str | None = None
 
