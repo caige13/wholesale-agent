@@ -1,0 +1,222 @@
+[
+  {
+    "sku": "DELI-08",
+    "product_name": "8oz Deli Container",
+    "aliases": ["deli cup", "8 oz deli", "8oz deli container", "soup container small"],
+    "category": "containers",
+    "unit_size": "8oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "requires_lids": true,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "DELI-16",
+    "product_name": "16oz Deli Container",
+    "aliases": ["16 oz deli", "16oz deli container", "pint deli", "soup container medium"],
+    "category": "containers",
+    "unit_size": "16oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "requires_lids": true,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "DELI-32",
+    "product_name": "32oz Deli Container",
+    "aliases": ["32 oz deli", "32oz deli container", "quart deli", "soup container large"],
+    "category": "containers",
+    "unit_size": "32oz",
+    "case_pack": 480,
+    "min_order": 1,
+    "requires_lids": true,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "PCUP-2",
+    "product_name": "2oz Portion Cup",
+    "aliases": ["salsa cup", "salsa cups", "souffle cup", "sauce cup", "portion cup 2oz"],
+    "category": "cups",
+    "unit_size": "2oz",
+    "case_pack": 2500,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "PCUP-4",
+    "product_name": "4oz Portion Cup",
+    "aliases": ["salsa cup 4oz", "souffle cup 4oz", "sauce cup 4oz", "portion cup 4oz"],
+    "category": "cups",
+    "unit_size": "4oz",
+    "case_pack": 2500,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "LID-DELI",
+    "product_name": "Deli Container Lid",
+    "aliases": ["deli lid", "deli container lid", "container lid"],
+    "category": "lids",
+    "unit_size": "fits 8-32oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "LID-PCUP",
+    "product_name": "Portion Cup Lid",
+    "aliases": ["souffle lid", "portion cup lid", "salsa cup lid"],
+    "category": "lids",
+    "unit_size": "fits 2-4oz",
+    "case_pack": 2500,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "LID-HOT",
+    "product_name": "Hot Cup Lid",
+    "aliases": ["coffee lid", "hot cup lid", "dome lid"],
+    "category": "lids",
+    "unit_size": "fits 10-16oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "CUP-12",
+    "product_name": "12oz Paper Hot Cup",
+    "aliases": ["coffee cup", "hot cup 12oz", "12 oz hot cup"],
+    "category": "cups",
+    "unit_size": "12oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": true,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "CUP-16C",
+    "product_name": "16oz Paper Cold Cup",
+    "aliases": ["cold cup 16oz", "16 oz cold cup", "soda cup"],
+    "category": "cups",
+    "unit_size": "16oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": true,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "LIME-FRESH",
+    "product_name": "Fresh Limes",
+    "aliases": ["limes", "lime", "key limes"],
+    "category": "produce",
+    "unit_size": "40lb case",
+    "case_pack": 200,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "LEMON-FRESH",
+    "product_name": "Fresh Lemons",
+    "aliases": ["lemons", "lemon"],
+    "category": "produce",
+    "unit_size": "40lb case",
+    "case_pack": 165,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "NAPKIN-1",
+    "product_name": "Dinner Napkins",
+    "aliases": ["napkins", "dinner napkin", "paper napkins"],
+    "category": "paper",
+    "unit_size": "1-ply",
+    "case_pack": 3000,
+    "min_order": 2,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "STRAW-WRAP",
+    "product_name": "Wrapped Straws",
+    "aliases": ["straws", "wrapped straws", "drinking straws"],
+    "category": "paper",
+    "unit_size": "7.75in",
+    "case_pack": 10000,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "BAG-TG",
+    "product_name": "To-Go Paper Bags",
+    "aliases": ["to go bags", "paper bags", "takeout bags", "to-go bags"],
+    "category": "paper",
+    "unit_size": "medium",
+    "case_pack": 500,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "FORK-PLAS",
+    "product_name": "Heavyweight Plastic Forks",
+    "aliases": ["forks", "plastic forks", "plastic fork"],
+    "category": "utensils",
+    "unit_size": "heavyweight",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "GLOVE-M",
+    "product_name": "Nitrile Gloves Medium",
+    "aliases": ["gloves medium", "nitrile gloves m", "medium gloves"],
+    "category": "safety",
+    "unit_size": "medium",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "GLOVE-L",
+    "product_name": "Nitrile Gloves Large",
+    "aliases": ["gloves large", "nitrile gloves l", "large gloves"],
+    "category": "safety",
+    "unit_size": "large",
+    "case_pack": 1000,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "FOIL-ROLL",
+    "product_name": "Aluminum Foil Roll",
+    "aliases": ["foil", "aluminum foil", "foil roll"],
+    "category": "wraps",
+    "unit_size": "18in x 500ft",
+    "case_pack": 1,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "TOWEL-ROLL",
+    "product_name": "Paper Towel Rolls",
+    "aliases": ["paper towels", "towels", "kitchen towels"],
+    "category": "paper",
+    "unit_size": "case of 30",
+    "case_pack": 30,
+    "min_order": 1,
+    "requires_lids": false,
+    "supplier": "acme-foodservice"
+  }
+]
