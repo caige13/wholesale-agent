@@ -31,8 +31,8 @@ class CatalogItem(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     category: str
     unit_size: str  # human-readable, e.g. "16oz" or "case of 500"
-    case_pack: int  # units per case
-    min_order: int = 1  # minimum number of cases per order
+    case_pack: int = Field(gt=0)  # units per case; a divisor in validate_rules
+    min_order: int = Field(default=1, gt=0)  # minimum number of cases per order
     requires_lids: bool = False
     supplier: str  # supplier-keyed from day 1 (Stage-2 seam)
 
@@ -81,6 +81,9 @@ class LineItem(BaseModel):
     supplier: str | None = None
     unit: str | None = None
     quantity: int | None = None
+    # Raw unit count when the user orders in units ("1000 containers") rather than
+    # cases; validate_rules rounds it up into `quantity` (whole cases).
+    unit_quantity: int | None = None
     unit_price: float | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     flags: list[Flag] = Field(default_factory=list)
