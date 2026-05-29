@@ -45,3 +45,25 @@ class ResolutionCandidate(BaseModel):
 
     item: CatalogItem
     score: float = Field(ge=0.0, le=1.0)
+
+
+class LineItem(BaseModel):
+    """A line in the order / running cart.
+
+    Only the fields the UI needs to render a cart line exist so far; resolution
+    and validation grow this (``confidence``, ``flags``, ``unit_quantity`` …)
+    test-first as we build inward — see ``_deferred.py`` for the fuller shape.
+    """
+
+    sku: str | None = None
+    product_name: str | None = None
+    supplier: str | None = None
+    unit: str | None = None
+    quantity: int | None = None
+    unit_price: float | None = None
+
+
+# The running draft order, keyed by supplier. Persists across turns; the UI
+# mirrors it as a thin display of this graph-owned state (supplier-keyed from
+# day 1 = Stage-2 seam).
+Cart = dict[str, list[LineItem]]
