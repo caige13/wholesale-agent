@@ -49,12 +49,31 @@ class ResolutionCandidate(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
 
 
+class Flag(StrEnum):
+    """Per-line conditions raised during the pipeline.
+
+    ``validate_rules`` sets the static-catalog flags (``NEEDS_LIDS``,
+    ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``); ``OUT_OF_STOCK`` is set by the
+    inventory check against the supplier API. Some flags are *blocking* (the gate
+    clarifies on them even at high confidence); ``ROUNDED_TO_CASE_PACK`` is
+    informational only. The blocking set lives in ``src.app.graph.policies`` so
+    the gate owns that policy, not the domain.
+    """
+
+    NEEDS_LIDS = "needs_lids"
+    OUT_OF_STOCK = "out_of_stock"
+    AMBIGUOUS_SIZE = "ambiguous_size"
+    BELOW_MINIMUM = "below_minimum"
+    ROUNDED_TO_CASE_PACK = "rounded_to_case_pack"
+
+
 class LineItem(BaseModel):
     """A line in the order / running cart.
 
-    Only the fields the UI needs to render a cart line exist so far; resolution
-    and validation grow this (``confidence``, ``flags``, ``unit_quantity`` …)
-    test-first as we build inward — see ``_deferred.py`` for the fuller shape.
+    Fields fill in as the line moves through the pipeline: display fields from
+    parsing/resolution, ``confidence`` from resolution (drives the gate), and
+    ``flags`` from validation / inventory. ``unit_quantity`` returns with
+    validate_rules — see ``_deferred.py``.
     """
 
     sku: str | None = None
@@ -63,6 +82,8 @@ class LineItem(BaseModel):
     unit: str | None = None
     quantity: int | None = None
     unit_price: float | None = None
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    flags: list[Flag] = Field(default_factory=list)
 
 
 class CartOpKind(StrEnum):
