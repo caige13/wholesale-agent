@@ -47,8 +47,14 @@ def validate_node(state: dict, catalog: CatalogRepository) -> dict:
         # A removal isn't validated (no lids/minimum to check on the way out).
         if op.op is CartOpKind.REMOVE or catalog_item is None:
             ops.append(op)
-        else:
-            ops.append(op.model_copy(update={"item": validate_rules(op.item, catalog_item)}))
+            continue
+        item = validate_rules(op.item, catalog_item)
+        # The lids nudge is an add-time suggestion; don't re-ask when only the
+        # quantity of an existing line changes.
+        if op.op is not CartOpKind.ADD and Flag.NEEDS_LIDS in item.flags:
+            kept = [f for f in item.flags if f != Flag.NEEDS_LIDS]
+            item = item.model_copy(update={"flags": kept})
+        ops.append(op.model_copy(update={"item": item}))
     return {"cart_ops": ops}
 
 

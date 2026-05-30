@@ -65,6 +65,15 @@ def test_validate_node_raises_flags_on_the_op_item(make_catalog_item):
     assert Flag.NEEDS_LIDS in out["cart_ops"][0].item.flags
 
 
+def test_validate_node_does_not_re_ask_for_lids_on_a_quantity_change(make_catalog_item):
+    # Bumping the quantity of a container already in the cart shouldn't re-nag about lids.
+    deli = make_catalog_item(sku="DELI-16", requires_lids=True)
+    repo = FakeCatalogRepo(items_by_sku={"DELI-16": deli})
+    line = LineItem(raw_text="deli", sku="DELI-16", quantity=3)
+    out = validate_node({"cart_ops": [CartOp(op=CartOpKind.SET_QUANTITY, item=line)]}, repo)
+    assert Flag.NEEDS_LIDS not in out["cart_ops"][0].item.flags
+
+
 def test_validate_node_skips_remove_ops(make_catalog_item):
     deli = make_catalog_item(sku="DELI-16", requires_lids=True)
     repo = FakeCatalogRepo(items_by_sku={"DELI-16": deli})

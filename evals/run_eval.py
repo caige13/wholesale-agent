@@ -89,9 +89,14 @@ def main() -> None:
         ans = "-"
         if result.answer and judge is not None:
             context = _format_context(catalog.find_candidates(row["input_message"]))
-            faithful = answer_faithfulness(row["input_message"], context, result.answer, judge)
-            faithfulness.append(faithful)
-            ans = "ok" if faithful else "FAIL"
+            try:
+                faithful = answer_faithfulness(row["input_message"], context, result.answer, judge)
+                faithfulness.append(faithful)
+                ans = "ok" if faithful else "FAIL"
+            except Exception as exc:  # noqa: BLE001 — a dead judge shouldn't sink the run
+                ans = "err"
+                judge = None  # stop hammering an unavailable judge
+                print(f"  (answer judge unavailable: {type(exc).__name__} — skipping it)")
 
         print(f"{row['id']:<22}{ext:>8.2f}{('ok' if clr else 'FAIL'):>9}{ans:>9}")
 

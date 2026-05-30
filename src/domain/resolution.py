@@ -47,6 +47,12 @@ def resolve_skus(
     if exact is not None:
         return _resolved(item, exact, ALIAS_CONFIDENCE)
 
+    # 2b. Size disambiguation: when a size token in the phrase ("16oz") matches
+    #     exactly one candidate's unit_size, it resolves a same-family cluster.
+    sized = _size_match(candidates, phrase)
+    if sized is not None:
+        return _resolved(item, sized, ALIAS_CONFIDENCE)
+
     # 3. A clearly-best candidate: strong enough and well ahead of the runner-up.
     ranked = sorted(candidates, key=lambda c: c.score, reverse=True)
     top = ranked[0]
@@ -76,6 +82,17 @@ def _resolved(item: LineItem, catalog_item: CatalogItem, confidence: float) -> L
 
 def _candidate_for_sku(candidates: list[ResolutionCandidate], sku: str) -> CatalogItem | None:
     return next((c.item for c in candidates if c.item.sku == sku), None)
+
+
+def _size_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
+    """Resolve when a phrase token equals exactly one candidate's unit_size.
+
+    Token (not substring) match so "16oz" doesn't spuriously match "6oz". Returns
+    None unless exactly one candidate matches, so a genuine ambiguity stays open.
+    """
+    tokens = phrase.split()
+    matches = [c.item for c in candidates if c.item.unit_size.lower() in tokens]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _exact_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:

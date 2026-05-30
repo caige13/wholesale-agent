@@ -86,6 +86,19 @@ def test_leaves_the_sku_unresolved_when_candidates_are_ambiguous(make_candidate)
     assert resolve_skus(item, candidates).sku is None
 
 
+def test_resolves_by_size_token_when_candidates_share_a_family(make_candidate):
+    # "16oz deli" (no "container") doesn't alias-match and the sizes cluster — but
+    # the 16oz token matches exactly one candidate's unit_size, which disambiguates.
+    item = LineItem(raw_text="16oz deli")
+    candidates = [
+        make_candidate(score=0.84, sku="DELI-08", product_name="8oz Deli", unit_size="8oz"),
+        make_candidate(score=0.83, sku="DELI-16", product_name="16oz Deli", unit_size="16oz"),
+    ]
+    out = resolve_skus(item, candidates)
+    assert out.sku == "DELI-16"
+    assert out.confidence >= 0.6
+
+
 def test_attaches_the_candidate_options_when_ambiguous(make_candidate):
     item = LineItem(raw_text="deli containers")
     candidates = [
