@@ -20,8 +20,10 @@ class LangGraphOrderAgent:
     def __init__(self, graph):
         self._graph = graph
 
-    def run(self, message: str, cart: Cart) -> AgentResult:
-        final = self._graph.invoke({"raw_message": message, "draft_cart": cart})
+    def run(self, message: str, cart: Cart, history: list[dict] | None = None) -> AgentResult:
+        final = self._graph.invoke(
+            {"raw_message": message, "draft_cart": cart, "history": history or []}
+        )
         return AgentResult(
             draft_cart=final.get("draft_cart") or cart,
             clarifications=final.get("clarifications", []),

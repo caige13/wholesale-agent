@@ -54,8 +54,12 @@ def resolve_skus(
     if top.score >= MIN_SCORE and (top.score - runner_up) >= MARGIN:
         return _resolved(item, top.item, top.score)
 
-    # 4. Too close or too weak → unresolved, low confidence (the gate will clarify).
-    return item.model_copy(update={"sku": None, "confidence": AMBIGUOUS_CONFIDENCE})
+    # 4. Too close or too weak → unresolved, low confidence (the gate will clarify),
+    #    carrying the close candidates so the clarifying question can offer them.
+    options = [c.item.product_name for c in ranked[:3]]
+    return item.model_copy(
+        update={"sku": None, "confidence": AMBIGUOUS_CONFIDENCE, "options": options}
+    )
 
 
 def _resolved(item: LineItem, catalog_item: CatalogItem, confidence: float) -> LineItem:
@@ -75,8 +79,15 @@ def _candidate_for_sku(candidates: list[ResolutionCandidate], sku: str) -> Catal
 
 
 def _exact_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
+    """Match when a candidate's product name or an alias is contained in the phrase.
+
+    Containment (not just equality) lets a qualifier/plural still match — e.g.
+    "16oz deli containers" contains the alias "16oz deli container" — which
+    disambiguates same-family items the embedding scores cluster together. Bare
+    "deli containers" still matches no specific alias, so it stays ambiguous.
+    """
     for c in candidates:
         names = [c.item.product_name.lower(), *(a.lower() for a in c.item.aliases)]
-        if phrase in names:
+        if any(name in phrase for name in names):
             return c.item
     return None

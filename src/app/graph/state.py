@@ -16,7 +16,7 @@ from operator import add
 from typing import Annotated, TypedDict
 
 from src.domain.cart import Cart
-from src.domain.models import Intent, LineItem, OrderStatus
+from src.domain.models import CartOp, Intent, OrderStatus
 
 
 class OrderState(TypedDict, total=False):
@@ -25,9 +25,15 @@ class OrderState(TypedDict, total=False):
     raw_message: str  # original user text this turn
     clean_message: str  # redacted + unit-normalized
     pii_found: list[str]  # guardrail trace visibility (types only)
+    # Recent chat turns ({role, content}) so the LLM can interpret follow-ups
+    # ("yes, 16oz") against the prior question. Single-turn graph; this is the
+    # lightweight alternative to a checkpointer (see README design notes).
+    history: list[dict]
 
     intent: Intent | None
-    line_items: list[LineItem]  # parsed + resolved + validated this turn
+    # The per-turn operations (add/set_quantity/remove). parse_order produces them;
+    # resolve/validate enrich each op's item; apply folds them into the cart.
+    cart_ops: list[CartOp]
 
     draft_cart: Cart  # the running cart — PERSISTS across turns
     clarifications: Annotated[list[str], add]  # accumulates within a turn

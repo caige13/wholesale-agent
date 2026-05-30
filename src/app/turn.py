@@ -23,9 +23,17 @@ class TurnResult(BaseModel):
     cart: Cart = Field(default_factory=Cart)
 
 
-def handle_turn(message: str, cart: Cart, agent: OrderAgent) -> TurnResult:
-    """Run one turn through the agent and shape it for the UI."""
-    result = agent.run(message, cart)
+def handle_turn(
+    message: str, cart: Cart, agent: OrderAgent, history: list[dict] | None = None
+) -> TurnResult:
+    """Run one turn through the agent and shape it for the UI.
+
+    ``history`` (recent {role, content} turns) is passed through so the agent can
+    resolve follow-ups against the prior exchange.
+    """
+    # Pass history only when present, so an agent whose run() predates the
+    # history parameter keeps working — the UI adopts history at its own pace.
+    result = agent.run(message, cart, history) if history else agent.run(message, cart)
     return TurnResult(reply=_compose_reply(result), cart=result.draft_cart)
 
 

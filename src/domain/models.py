@@ -88,6 +88,9 @@ class LineItem(BaseModel):
     unit_price: float | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     flags: list[Flag] = Field(default_factory=list)
+    # When resolution is ambiguous, the candidate product names to offer the user
+    # ("did you mean 8oz, 16oz, or 32oz?"). Empty once resolved.
+    options: list[str] = Field(default_factory=list)
 
 
 class CartOpKind(StrEnum):

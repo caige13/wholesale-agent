@@ -39,6 +39,23 @@ def test_resolves_via_an_exact_alias_match(make_candidate):
     assert out.confidence >= 0.6
 
 
+def test_resolves_a_size_qualified_phrase_when_an_alias_is_contained_in_it(make_candidate):
+    # "16oz deli containers" must land on DELI-16 even though the deli sizes cluster
+    # close together — the size qualifier disambiguates via alias containment.
+    item = LineItem(raw_text="16oz deli containers")
+    candidates = [
+        make_candidate(
+            score=0.85, sku="DELI-08", product_name="8oz Deli Container",
+            aliases=["8oz deli container"],
+        ),
+        make_candidate(
+            score=0.84, sku="DELI-16", product_name="16oz Deli Container",
+            aliases=["16oz deli container"],
+        ),
+    ]
+    assert resolve_skus(item, candidates).sku == "DELI-16"
+
+
 def test_prefers_item_memory_over_the_catalog_candidates(make_candidate):
     item = LineItem(raw_text="deli")
     candidates = [  # genuinely ambiguous on their own
@@ -67,6 +84,17 @@ def test_leaves_the_sku_unresolved_when_candidates_are_ambiguous(make_candidate)
         make_candidate(score=0.82, sku="DELI-16", product_name="16oz Deli Container"),
     ]
     assert resolve_skus(item, candidates).sku is None
+
+
+def test_attaches_the_candidate_options_when_ambiguous(make_candidate):
+    item = LineItem(raw_text="deli containers")
+    candidates = [
+        make_candidate(score=0.84, sku="DELI-08", product_name="8oz Deli Container"),
+        make_candidate(score=0.82, sku="DELI-16", product_name="16oz Deli Container"),
+    ]
+    options = resolve_skus(item, candidates).options
+    assert "8oz Deli Container" in options
+    assert "16oz Deli Container" in options
 
 
 def test_returns_low_confidence_when_the_best_score_is_weak(make_candidate):

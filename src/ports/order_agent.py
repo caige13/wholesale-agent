@@ -30,6 +30,10 @@ class AgentResult(BaseModel):
 
 @runtime_checkable
 class OrderAgent(Protocol):
-    def run(self, message: str, cart: Cart) -> AgentResult:
-        """Process one turn against the running cart, returning its result."""
+    def run(self, message: str, cart: Cart, history: list[dict] | None = None) -> AgentResult:
+        """Process one turn against the running cart, returning its result.
+
+        ``history`` is the recent conversation ({role, content}); it lets the
+        agent interpret follow-ups in context (e.g. answering a clarification).
+        """
         ...

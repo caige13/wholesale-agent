@@ -16,7 +16,13 @@ from src.app.graph.agent import LangGraphOrderAgent  # noqa: E402
 from src.app.graph.graph import build_graph  # noqa: E402
 from src.app.graph.llm_nodes import IntentResult, ParsedItem, ParsedOrder  # noqa: E402
 from src.domain.cart import Cart  # noqa: E402
-from src.domain.models import CatalogItem, Intent, LineItem, ResolutionCandidate  # noqa: E402
+from src.domain.models import (  # noqa: E402
+    CartOpKind,
+    CatalogItem,
+    Intent,
+    LineItem,
+    ResolutionCandidate,
+)
 from src.ports.order_agent import AgentResult  # noqa: E402
 
 S = "acme-foodservice"
@@ -95,6 +101,36 @@ def test_ambiguous_order_asks_for_clarification():
     parsed = ParsedOrder(items=[ParsedItem(phrase="deli containers")])
     result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("some deli", Cart())
     assert result.clarifications
+
+
+def test_set_quantity_updates_an_existing_cart_line_in_place():
+    deli = _item("DELI-16", "16oz Deli Container", aliases=["16oz deli"])
+    catalog = FakeCatalog(
+        items_by_sku={"DELI-16": deli},
+        candidates_by_phrase={"16oz deli": [ResolutionCandidate(item=deli, score=0.95)]},
+    )
+    parsed = ParsedOrder(
+        items=[ParsedItem(phrase="16oz deli", quantity=3, action=CartOpKind.SET_QUANTITY)]
+    )
+    existing = LineItem(sku="DELI-16", product_name="16oz Deli Container", supplier=S, quantity=2)
+    cart = Cart(by_supplier={S: [existing]})
+    result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("make it 3", cart)
+    lines = result.draft_cart.by_supplier[S]
+    assert len(lines) == 1  # replaced, not duplicated
+    assert lines[0].quantity == 3
+
+
+def test_remove_drops_an_existing_cart_line():
+    lime = _item("LIME-FRESH", "Fresh Limes", aliases=["limes"])
+    catalog = FakeCatalog(
+        items_by_sku={"LIME-FRESH": lime},
+        candidates_by_phrase={"limes": [ResolutionCandidate(item=lime, score=0.95)]},
+    )
+    parsed = ParsedOrder(items=[ParsedItem(phrase="limes", action=CartOpKind.REMOVE)])
+    existing = LineItem(sku="LIME-FRESH", product_name="Fresh Limes", supplier=S, quantity=1)
+    cart = Cart(by_supplier={S: [existing]})
+    result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("drop the limes", cart)
+    assert result.draft_cart.is_empty()
 
 
 def test_question_returns_answer_and_leaves_the_cart_unchanged():

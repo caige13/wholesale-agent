@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from src.domain.models import Intent, LineItem, ResolutionCandidate
+from src.domain.models import CartOp, CartOpKind, Intent, LineItem, ResolutionCandidate
 from src.ports import CatalogRepository
 
 if TYPE_CHECKING:
@@ -23,11 +23,14 @@ if TYPE_CHECKING:
 
 # --- Structured-output schemas the model fills ------------------------------
 class ParsedItem(BaseModel):
-    """One requested product extracted from the message."""
+    """One requested change to the order, extracted from the message."""
 
     phrase: str  # the product phrase as the user said it, e.g. "16oz deli"
     quantity: int | None = None  # number of cases, if stated
     unit_quantity: int | None = None  # raw unit count, if stated ("1200 containers")
+    # add a new/more of an item, set_quantity to change an existing line to an
+    # exact amount ("make it 3"), or remove an existing line ("drop the limes").
+    action: CartOpKind = CartOpKind.ADD
 
 
 class ParsedOrder(BaseModel):
@@ -45,9 +48,12 @@ _INTENT_INSTRUCTIONS = (
     "Message:\n"
 )
 _PARSE_INSTRUCTIONS = (
-    "Extract the supply items the restaurant wants to order. For each, give the "
-    "product phrase as said, and either the number of cases (quantity) or a raw "
-    "unit count (unit_quantity) if they ordered in units. Message:\n"
+    "Extract the changes the restaurant wants to make to its order. For each item "
+    "give the product phrase as said, and either the number of cases (quantity) or "
+    "a raw unit count (unit_quantity) if ordered in units. Choose an action: 'add' "
+    "for new/more items, 'set_quantity' to change an existing line to an exact "
+    "amount (e.g. 'make it 3'), or 'remove' to drop an existing line.\n\n"
+    "Current cart:\n{cart}\n\nMessage:\n{message}"
 )
 _QA_INSTRUCTIONS = (
     "Answer the restaurant's product question using only the catalog context. Be "
@@ -58,21 +64,45 @@ _QA_INSTRUCTIONS = (
 
 # --- Nodes (graph order: intent -> parse ... and the question branch) -------
 def intent_node(state: dict, model: BaseChatModel) -> dict:
-    result = model.with_structured_output(IntentResult).invoke(
-        _INTENT_INSTRUCTIONS + state["clean_message"]
-    )
+    prompt = _format_history(state.get("history")) + _INTENT_INSTRUCTIONS + state["clean_message"]
+    result = model.with_structured_output(IntentResult).invoke(prompt)
     return {"intent": result.intent}
 
 
 def parse_node(state: dict, model: BaseChatModel) -> dict:
-    parsed = model.with_structured_output(ParsedOrder).invoke(
-        _PARSE_INSTRUCTIONS + state["clean_message"]
+    prompt = _format_history(state.get("history")) + _PARSE_INSTRUCTIONS.format(
+        cart=_cart_context(state.get("draft_cart")), message=state["clean_message"]
     )
-    line_items = [
-        LineItem(raw_text=item.phrase, quantity=item.quantity, unit_quantity=item.unit_quantity)
+    parsed = model.with_structured_output(ParsedOrder).invoke(prompt)
+    cart_ops = [
+        CartOp(
+            op=item.action,
+            item=LineItem(
+                raw_text=item.phrase, quantity=item.quantity, unit_quantity=item.unit_quantity
+            ),
+        )
         for item in parsed.items
     ]
-    return {"line_items": line_items}
+    return {"cart_ops": cart_ops}
+
+
+def _format_history(history: list[dict] | None) -> str:
+    """Render the last few turns so the model can interpret a follow-up in context."""
+    if not history:
+        return ""
+    lines = "\n".join(
+        f"{turn.get('role', 'user')}: {turn.get('content', '')}" for turn in history[-6:]
+    )
+    return f"Recent conversation:\n{lines}\n\n"
+
+
+def _cart_context(cart) -> str:
+    """Render the current cart so the model can resolve set_quantity / remove."""
+    if cart is None or cart.is_empty():
+        return "(cart is empty)"
+    return "\n".join(
+        f"- {item.quantity} x {item.product_name} ({item.sku})" for item in cart.all_lines()
+    )
 
 
 def rag_qa_node(state: dict, model: BaseChatModel, catalog: CatalogRepository) -> dict:
@@ -80,8 +110,23 @@ def rag_qa_node(state: dict, model: BaseChatModel, catalog: CatalogRepository) -
     prompt = _QA_INSTRUCTIONS.format(
         context=_format_context(candidates), question=state["clean_message"]
     )
-    message = model.invoke(prompt)
-    return {"answer": getattr(message, "content", str(message))}
+    return {"answer": _message_text(model.invoke(prompt))}
+
+
+def _message_text(message: object) -> str:
+    """Flatten a chat message's content to text. Gemini returns a list of content
+    blocks (e.g. ``[{"type": "text", "text": "..."}]``); others return a string.
+    """
+    content = getattr(message, "content", message)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        ]
+        return "".join(parts)
+    return str(content)
 
 
 def _format_context(candidates: list[ResolutionCandidate]) -> str:

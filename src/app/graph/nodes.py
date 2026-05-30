@@ -12,7 +12,7 @@ deterministic half of the graph. Defined in the order the graph calls them:
 from __future__ import annotations
 
 from src.domain.cart import Cart
-from src.domain.models import CartOp, CartOpKind, Flag, LineItem, OrderStatus
+from src.domain.models import CartOpKind, Flag, LineItem, OrderStatus
 from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 from src.domain.redaction import redact_normalize
 from src.domain.resolution import resolve_skus
@@ -32,28 +32,29 @@ def redact_node(state: dict) -> dict:
 def resolve_node(
     state: dict, catalog: CatalogRepository, item_memory: dict[str, str] | None = None
 ) -> dict:
-    resolved = [
-        resolve_skus(line, catalog.find_candidates(line.raw_text), item_memory)
-        for line in state.get("line_items", [])
-    ]
-    return {"line_items": resolved}
+    ops = []
+    for op in state.get("cart_ops", []):
+        candidates = catalog.find_candidates(op.item.raw_text)
+        resolved = resolve_skus(op.item, candidates, item_memory)
+        ops.append(op.model_copy(update={"item": resolved}))
+    return {"cart_ops": ops}
 
 
 def validate_node(state: dict, catalog: CatalogRepository) -> dict:
-    validated = []
-    for line in state.get("line_items", []):
-        catalog_item = catalog.get(line.sku) if line.sku else None
-        validated.append(validate_rules(line, catalog_item) if catalog_item else line)
-    return {"line_items": validated}
+    ops = []
+    for op in state.get("cart_ops", []):
+        catalog_item = catalog.get(op.item.sku) if op.item.sku else None
+        # A removal isn't validated (no lids/minimum to check on the way out).
+        if op.op is CartOpKind.REMOVE or catalog_item is None:
+            ops.append(op)
+        else:
+            ops.append(op.model_copy(update={"item": validate_rules(op.item, catalog_item)}))
+    return {"cart_ops": ops}
 
 
 def apply_node(state: dict) -> dict:
     cart: Cart = state.get("draft_cart") or Cart()
-    ops = [
-        CartOp(op=CartOpKind.ADD, item=line)
-        for line in state.get("line_items", [])
-        if line.sku
-    ]
+    ops = [op for op in state.get("cart_ops", []) if op.item.sku]  # skip unresolved
     return {"draft_cart": cart.apply(ops)}
 
 
@@ -62,8 +63,9 @@ def draft_node(state: dict) -> dict:
 
 
 def clarify_node(state: dict) -> dict:
+    items = [op.item for op in state.get("cart_ops", [])]
     return {
-        "clarifications": build_clarifications(state.get("line_items", [])),
+        "clarifications": build_clarifications(items),
         "status": OrderStatus.NEEDS_CLARIFICATION,
     }
 
@@ -76,9 +78,13 @@ def build_clarifications(line_items: list[LineItem]) -> list[str]:
     for line in line_items:
         label = line.product_name or line.raw_text
         if line.confidence < CONFIDENCE_THRESHOLD:
-            questions.append(
-                f'I could not confidently match "{line.raw_text}". Which product did you mean?'
-            )
+            if line.options:
+                options = _join_options(line.options)
+                questions.append(f'For "{line.raw_text}", did you mean {options}?')
+            else:
+                questions.append(
+                    f'I could not confidently match "{line.raw_text}". Which product did you mean?'
+                )
             continue
         blocking = [flag for flag in line.flags if flag in BLOCKING_FLAGS]
         if Flag.NEEDS_LIDS in blocking:
@@ -90,3 +96,12 @@ def build_clarifications(line_items: list[LineItem]) -> list[str]:
         elif Flag.AMBIGUOUS_SIZE in blocking:
             questions.append(f"What size of {label} did you want?")
     return questions
+
+
+def _join_options(options: list[str]) -> str:
+    """Render options as 'A', 'A or B', or 'A, B, or C'."""
+    if len(options) == 1:
+        return options[0]
+    if len(options) == 2:
+        return f"{options[0]} or {options[1]}"
+    return f"{', '.join(options[:-1])}, or {options[-1]}"

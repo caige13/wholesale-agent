@@ -69,4 +69,4 @@ def _route_by_intent(state: OrderState) -> str:
 
 
 def _gate_decision(state: OrderState) -> str:
-    return gate(state.get("line_items", []))
+    return gate([op.item for op in state.get("cart_ops", [])])

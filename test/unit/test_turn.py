@@ -19,9 +19,11 @@ class FakeOrderAgent:
     def __init__(self, result: AgentResult):
         self._result = result
         self.calls: list[tuple[str, Cart]] = []
+        self.last_history = None
 
-    def run(self, message: str, cart: Cart) -> AgentResult:
+    def run(self, message: str, cart: Cart, history=None) -> AgentResult:
         self.calls.append((message, cart))
+        self.last_history = history
         return self._result
 
 
@@ -44,6 +46,16 @@ def test_delegates_the_message_and_cart_to_the_agent():
 def test_returns_a_turn_result():
     agent = FakeOrderAgent(AgentResult(draft_cart=Cart()))
     assert isinstance(handle_turn("hi", Cart(), agent), TurnResult)
+
+
+def test_passes_chat_history_through_to_the_agent():
+    agent = FakeOrderAgent(AgentResult(draft_cart=Cart()))
+    history = [
+        {"role": "user", "content": "deli containers"},
+        {"role": "assistant", "content": "which size?"},
+    ]
+    handle_turn("16oz", Cart(), agent, history=history)
+    assert agent.last_history == history
 
 
 def test_returns_the_answer_and_preserves_the_cart_on_a_question_turn():
