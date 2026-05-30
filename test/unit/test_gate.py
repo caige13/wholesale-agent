@@ -9,8 +9,8 @@ covered by the eval set, not here.
 """
 
 from src.app.graph.gates import gate
-from src.app.graph.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 from src.domain.models import Flag, LineItem
+from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 
 
 def test_drafts_when_all_items_are_high_confidence():

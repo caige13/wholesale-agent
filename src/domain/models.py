@@ -56,7 +56,7 @@ class Flag(StrEnum):
     ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``); ``OUT_OF_STOCK`` is set by the
     inventory check against the supplier API. Some flags are *blocking* (the gate
     clarifies on them even at high confidence); ``ROUNDED_TO_CASE_PACK`` is
-    informational only. The blocking set lives in ``src.app.graph.policies`` so
+    informational only. The blocking set lives in ``src.domain.policies`` so
     the gate owns that policy, not the domain.
     """
 
@@ -76,6 +76,7 @@ class LineItem(BaseModel):
     validate_rules — see ``_deferred.py``.
     """
 
+    raw_text: str = ""  # the phrase parsed from the message; resolve_skus matches on it
     sku: str | None = None
     product_name: str | None = None
     supplier: str | None = None

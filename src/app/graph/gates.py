@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from src.app.graph.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 from src.domain.models import LineItem
+from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 
 Decision = Literal["clarify", "draft"]
 
