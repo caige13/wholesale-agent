@@ -27,6 +27,10 @@ class Settings:
     # Client-side throttle (requests/min) so we stay under the model's quota.
     # Default is safe for the Gemini free tier (5/min); raise it on a paid tier.
     gemini_rpm: int
+    # Eval-only: a different model (OpenAI) judges the agent's free-text answers,
+    # so it never grades its own work.
+    openai_api_key: str | None
+    judge_model: str
     embedding_model: str
     langsmith_tracing: bool
     langsmith_api_key: str | None
@@ -40,6 +44,8 @@ def get_settings() -> Settings:
         google_api_key=os.getenv("GOOGLE_API_KEY") or None,
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         gemini_rpm=int(os.getenv("GEMINI_RPM", "5")),
+        openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+        judge_model=os.getenv("JUDGE_MODEL", "gpt-4o"),
         embedding_model=os.getenv(
             "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
         ),

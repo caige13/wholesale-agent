@@ -12,6 +12,8 @@ _ENV_VARS = [
     "GOOGLE_API_KEY",
     "GEMINI_MODEL",
     "GEMINI_RPM",
+    "OPENAI_API_KEY",
+    "JUDGE_MODEL",
     "EMBEDDING_MODEL",
     "LANGSMITH_TRACING",
     "LANGSMITH_API_KEY",
@@ -33,6 +35,8 @@ def test_applies_defaults_when_env_vars_are_absent(monkeypatch):
     s = get_settings()
     assert s.gemini_model == "gemini-2.5-flash"
     assert s.gemini_rpm == 5  # safe under the Gemini free-tier 5 req/min quota
+    assert s.judge_model == "gpt-4o"  # the (cross-model) eval judge
+    assert s.openai_api_key is None
     assert s.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
     assert s.langsmith_project == "ai-order-desk"
     assert s.google_api_key is None

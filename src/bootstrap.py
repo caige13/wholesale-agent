@@ -55,6 +55,20 @@ def build_chat_model():
     )
 
 
+def build_judge_model():
+    """The eval judge — a different model (OpenAI) from the agent, so it doesn't
+    grade its own work. Needs OPENAI_API_KEY. Used only by the eval runner.
+    """
+    from langchain_openai import ChatOpenAI
+
+    settings = get_settings()
+    return ChatOpenAI(
+        model=settings.judge_model,
+        api_key=settings.openai_api_key,
+        temperature=0,
+    )
+
+
 def build_agent(item_memory: dict[str, str] | None = None):
     """Wire the full order-desk agent: Gemini + FAISS catalog behind the graph."""
     from src.app.graph.agent import LangGraphOrderAgent
