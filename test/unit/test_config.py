@@ -11,6 +11,7 @@ from src.config import get_settings
 _ENV_VARS = [
     "GOOGLE_API_KEY",
     "GEMINI_MODEL",
+    "GEMINI_RPM",
     "EMBEDDING_MODEL",
     "LANGSMITH_TRACING",
     "LANGSMITH_API_KEY",
@@ -31,6 +32,7 @@ def test_applies_defaults_when_env_vars_are_absent(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     s = get_settings()
     assert s.gemini_model == "gemini-2.5-flash"
+    assert s.gemini_rpm == 5  # safe under the Gemini free-tier 5 req/min quota
     assert s.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
     assert s.langsmith_project == "ai-order-desk"
     assert s.google_api_key is None
@@ -45,6 +47,11 @@ def test_env_vars_override_the_defaults(monkeypatch):
     assert s.gemini_model == "gemini-test"
     assert s.google_api_key == "key-123"
     assert s.langsmith_tracing is True
+
+
+def test_reads_gemini_rpm_as_an_int_from_env(monkeypatch):
+    monkeypatch.setenv("GEMINI_RPM", "60")
+    assert get_settings().gemini_rpm == 60
 
 
 def test_normalizes_a_blank_api_key_to_none(monkeypatch):

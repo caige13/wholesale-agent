@@ -32,14 +32,26 @@ def build_catalog_repository(embeddings: Embeddings | None = None) -> CatalogRep
 
 
 def build_chat_model():
-    """The Gemini chat model (needs GOOGLE_API_KEY). temperature=0 for stability."""
+    """The Gemini chat model (needs GOOGLE_API_KEY). temperature=0 for stability.
+
+    A client-side rate limiter spaces requests so we don't trip the model's
+    per-minute quota (the free tier is only 5/min) — important once the eval
+    fires many calls in a row.
+    """
+    from langchain_core.rate_limiters import InMemoryRateLimiter
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     settings = get_settings()
+    rate_limiter = InMemoryRateLimiter(
+        requests_per_second=settings.gemini_rpm / 60.0,
+        check_every_n_seconds=0.5,
+        max_bucket_size=1,
+    )
     return ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         google_api_key=settings.google_api_key,
         temperature=0,
+        rate_limiter=rate_limiter,
     )
 
 

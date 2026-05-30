@@ -23,8 +23,10 @@ class Settings:
     """Frozen snapshot of environment configuration."""
 
     google_api_key: str | None
-    # NOTE: confirm the exact published id — "gemini flash 3.5" is not real.
     gemini_model: str
+    # Client-side throttle (requests/min) so we stay under the model's quota.
+    # Default is safe for the Gemini free tier (5/min); raise it on a paid tier.
+    gemini_rpm: int
     embedding_model: str
     langsmith_tracing: bool
     langsmith_api_key: str | None
@@ -37,6 +39,7 @@ def get_settings() -> Settings:
     return Settings(
         google_api_key=os.getenv("GOOGLE_API_KEY") or None,
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_rpm=int(os.getenv("GEMINI_RPM", "5")),
         embedding_model=os.getenv(
             "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
         ),
