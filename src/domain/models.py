@@ -105,3 +105,24 @@ class CartOp(BaseModel):
 
     op: CartOpKind
     item: LineItem
+
+
+class Intent(StrEnum):
+    """What the user is doing this turn — routes the graph after redaction.
+
+    Extensible: v2 adds RETURN / ORDER_STATUS without touching callers.
+    """
+
+    ORDER = "order"
+    REORDER = "reorder"
+    QUESTION = "question"
+
+
+class OrderStatus(StrEnum):
+    """Lifecycle of the turn's order — the terminal status the UI/trace reads."""
+
+    PARSING = "parsing"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    DRAFTED = "drafted"
+    CONFIRMED = "confirmed"
+    SUBMITTED = "submitted"
