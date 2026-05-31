@@ -167,9 +167,10 @@ test-first; the commit history follows that order.
 2. **Clarification behavior** — asked exactly when it should (deterministic; the thesis metric).
 3. **Answer faithfulness** — RAG answers grounded in the catalog (GPT-4o judge; needs `OPENAI_API_KEY`).
 
-A representative run: **extraction 83%, clarification 75%, answer faithfulness
-100%**, with the failures being the documented gaps below — the eval surfacing
-them is the point.
+A representative run: **extraction 92%, clarification 83%, answer faithfulness
+100%**. The only failures are the two documented deferred features below
+(`out_of_stock`, `reorder_usual`) — the eval surfacing them is the point, not a
+number to game; the dataset's expectations are never relaxed to pass.
 
 ---
 
@@ -184,8 +185,9 @@ them is the point.
   chat history into the prompt so follow-ups ("yes, 16oz") have context. The
   production version is a LangGraph **checkpointer + `interrupt()`/resume** keyed
   by thread id.
-- **`set_quantity` robustness** — "make it 3" is occasionally classified by the
-  model as `add`; this is parse-prompt tuning (few-shot) rather than a wiring bug.
+- **`set_quantity` robustness** — "make it 3" now classifies correctly, but it's
+  LLM-dependent; a few-shot example in the parse prompt would harden it against
+  regressions (the eval is what would catch one).
 - **Streaming** — stream tokens/steps to the UI via `graph.stream`.
 - **Multi-supplier** — the cart and catalog are supplier-keyed from day one;
   Stage 2 is "add catalog rows + a supplier adapter," not a graph rewrite.
