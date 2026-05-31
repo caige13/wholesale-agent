@@ -99,6 +99,9 @@ def main() -> None:
                 print(f"  (answer judge unavailable: {type(exc).__name__} — skipping it)")
 
         print(f"{row['id']:<22}{ext:>8.2f}{('ok' if clr else 'FAIL'):>9}{ans:>9}")
+        if ext < 1.0 or not clr:  # show what actually happened, to diagnose the miss
+            pairs = sorted((li.sku, li.quantity) for li in result.draft_cart.all_lines())
+            print(f"    cart={pairs}  asked={result.clarifications}")
 
     print("-" * 48)
     print(f"extraction correctness : {_mean(extraction):.0%}")
