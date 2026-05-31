@@ -99,6 +99,17 @@ def test_resolves_by_size_token_when_candidates_share_a_family(make_candidate):
     assert out.confidence >= 0.6
 
 
+def test_size_match_picks_the_best_scored_candidate_when_a_size_is_shared(make_candidate):
+    # "16oz" is shared by a deli and a cup; the embedding score breaks the tie.
+    item = LineItem(raw_text="16oz deli")
+    candidates = [
+        make_candidate(score=0.80, sku="DELI-16", product_name="16oz Deli", unit_size="16oz"),
+        make_candidate(score=0.30, sku="CUP-16C", product_name="16oz Cold Cup", unit_size="16oz"),
+        make_candidate(score=0.78, sku="DELI-08", product_name="8oz Deli", unit_size="8oz"),
+    ]
+    assert resolve_skus(item, candidates).sku == "DELI-16"
+
+
 def test_attaches_the_candidate_options_when_ambiguous(make_candidate):
     item = LineItem(raw_text="deli containers")
     candidates = [

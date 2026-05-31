@@ -85,14 +85,16 @@ def _candidate_for_sku(candidates: list[ResolutionCandidate], sku: str) -> Catal
 
 
 def _size_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
-    """Resolve when a phrase token equals exactly one candidate's unit_size.
+    """Resolve when a phrase token names a candidate's unit_size ("16oz deli").
 
-    Token (not substring) match so "16oz" doesn't spuriously match "6oz". Returns
-    None unless exactly one candidate matches, so a genuine ambiguity stays open.
+    Token (not substring) match so "16oz" doesn't spuriously match "6oz". A size
+    can be shared across families (a 16oz deli and a 16oz cup), so we return the
+    highest-scored size match and let the retriever's ranking break the tie. None
+    when the phrase names no size, so a genuine ambiguity ("deli containers") stays open.
     """
     tokens = phrase.split()
-    matches = [c.item for c in candidates if c.item.unit_size.lower() in tokens]
-    return matches[0] if len(matches) == 1 else None
+    sized = [c for c in candidates if c.item.unit_size.lower() in tokens]
+    return max(sized, key=lambda c: c.score).item if sized else None
 
 
 def _exact_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
