@@ -50,9 +50,13 @@ _INTENT_INSTRUCTIONS = (
 _PARSE_INSTRUCTIONS = (
     "Extract the changes the restaurant wants to make to its order. For each item "
     "give the product phrase as said, and either the number of cases (quantity) or "
-    "a raw unit count (unit_quantity) if ordered in units. Choose an action: 'add' "
-    "for new/more items, 'set_quantity' to change an existing line to an exact "
-    "amount (e.g. 'make it 3'), or 'remove' to drop an existing line.\n\n"
+    "a raw unit count (unit_quantity) if ordered in units.\n"
+    "Choose an action per item:\n"
+    "- 'add' for a new item or more of something.\n"
+    "- 'set_quantity' when the item is ALREADY in the current cart and the user "
+    "states a new total — e.g. 'make it 3', 'change the deli to 3 cases'. Do NOT "
+    "use 'add' for these; set the quantity to the new total.\n"
+    "- 'remove' to drop an item that's in the cart ('drop the limes').\n\n"
     "Current cart:\n{cart}\n\nMessage:\n{message}"
 )
 _QA_INSTRUCTIONS = (

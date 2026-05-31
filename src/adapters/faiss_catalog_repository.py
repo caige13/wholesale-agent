@@ -12,6 +12,8 @@ embeddings, so the keyless unit suite never loads it.
 
 from __future__ import annotations
 
+import warnings
+
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -46,7 +48,11 @@ class FaissCatalogRepository:
         return list(self._by_sku.values())
 
     def find_candidates(self, query: str, k: int = 5) -> list[ResolutionCandidate]:
-        hits = self._store.similarity_search_with_relevance_scores(query, k=k)
+        # Cosine relevance can dip below 0 for dissimilar items; that's expected
+        # (we clamp), so silence LangChain's out-of-[0,1] warning rather than spam it.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            hits = self._store.similarity_search_with_relevance_scores(query, k=k)
         candidates: list[ResolutionCandidate] = []
         for document, score in hits:
             item = self._by_sku.get(document.metadata.get("sku"))
