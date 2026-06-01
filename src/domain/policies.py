@@ -20,7 +20,7 @@ BLOCKING_FLAGS = frozenset(
     {
         Flag.AMBIGUOUS_SIZE,
         Flag.OUT_OF_STOCK,
-        Flag.NEEDS_LIDS,
+        Flag.NEEDS_COMPANION,
         Flag.BELOW_MINIMUM,
     }
 )

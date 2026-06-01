@@ -9,7 +9,6 @@ printed scores.
 Run:  uv run python -m evals.run_eval   (needs GOOGLE_API_KEY; OPENAI_API_KEY for the judge)
 
 Known gaps the eval will surface (documented future work, not bugs):
-  * out_of_stock  — inventory/SupplierGateway is deferred, so it won't flag/ask.
   * reorder_usual — item-memory isn't populated yet, so "the usual" won't resolve.
 """
 
@@ -26,6 +25,7 @@ from src.bootstrap import (  # noqa: E402
     build_catalog_repository,
     build_chat_model,
     build_judge_model,
+    build_supplier_gateway,
 )
 from src.config import get_settings  # noqa: E402
 from src.domain.cart import Cart  # noqa: E402
@@ -65,7 +65,9 @@ def main() -> None:
 
     rows = _load_rows()
     catalog = build_catalog_repository()
-    agent = LangGraphOrderAgent(build_graph(build_chat_model(), catalog))
+    agent = LangGraphOrderAgent(
+        build_graph(build_chat_model(), catalog, build_supplier_gateway())
+    )
     judge = build_judge_model() if settings.openai_api_key else None
     if judge is None:
         print("(no OPENAI_API_KEY — skipping the answer-faithfulness judge)\n")
@@ -78,7 +80,9 @@ def main() -> None:
     print("-" * 48)
     for row in rows:
         before = _cart_from(row.get("cart_before"))
-        result = agent.run(row["input_message"], before)
+        # Optional per-row history lets a row exercise a multi-turn follow-up
+        # (e.g. answering a pending add-on offer); absent ⇒ None, single-turn.
+        result = agent.run(row["input_message"], before, row.get("history"))
         expected = row["expected"]
 
         ext = extraction_score(expected, result.draft_cart, before)

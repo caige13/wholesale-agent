@@ -13,7 +13,8 @@ the LLM nodes, and **LangSmith** for tracing + evals.
 
 1. **Ask only when unsure.** A confidence gate proceeds autonomously on a clean
    order and asks a clarifying question *only* when an item is low-confidence or
-   carries a blocking flag (ambiguous size, needs lids, below minimum). When it
+   carries a blocking flag (ambiguous size, needs a companion add-on, below
+   minimum, out of stock). When it
    asks, it enumerates the real options ("did you mean 8oz, 16oz, or 32oz?").
 2. **An iterative, context-aware cart.** You add to, change quantities in, and
    remove from a running cart across turns, and can interleave product questions
@@ -62,9 +63,11 @@ graph TD
     START([User message]) --> redact[redact_normalize<br/>strip PII · normalize units]
     redact --> intent{intent}
     intent -->|question| ragqa[rag_qa<br/>answer from catalog]
-    intent -->|order / reorder| parse[parse_order<br/>-> cart_ops]
+    intent -->|order / reorder / yes-to-offer| parse[parse_order<br/>cart_ops + accepted_companions]
     parse --> resolve[resolve_skus<br/>retriever candidates -> SKU + confidence]
-    resolve --> validate[validate_rules<br/>case-pack · minimum · lids]
+    resolve --> companions[add_companions<br/>accepted offer -> ADD by SKU · qty = companion_case_count]
+    companions --> inv[check_inventory<br/>unit price · out_of_stock]
+    inv --> validate[validate_rules<br/>case-pack · minimum · companions]
     validate --> apply[apply cart_ops<br/>add / set_quantity / remove]
     apply --> gate{needs clarification?}
     gate -->|low confidence or blocking flag| clarify[ask_clarifying]
@@ -77,6 +80,16 @@ graph TD
 `redact_normalize` runs first, as a front-door guardrail, so PII never reaches
 the LLM or the trace. Deterministic nodes are pure functions; `intent`,
 `parse_order`, and `rag_qa` are the only LLM calls.
+
+**Companion add-ons (upsell) are data-driven and the loop is the conversation.**
+A catalog item names its pairings via `companion_skus` (e.g. a deli container →
+its lid), so `validate_rules` raises a generic `NEEDS_COMPANION` and the gate asks
+"needs matching X — should I add them?". The reply is parsed as a *closed-set
+selection* (`accepted_companions`), and `add_companions` adds the exact offered
+SKU(s) — sized deterministically by `companion_case_count`, never re-resolved from
+free text. A new item that itself needs a companion just raises its own offer next
+turn, so add → offer → accept → offer-the-next continues across turns until a turn
+needs no question and the gate drafts. Adding a pairing is a catalog edit, not code.
 
 ---
 
@@ -114,7 +127,7 @@ every concrete adapter.
   agent.
 
 - **Catalog (RAG) vs. supplier API — static vs. dynamic.** The catalog is the
-  semantic knowledge base (names, aliases, case packs, lids) and lives in the
+  semantic knowledge base (names, aliases, case packs, companions) and lives in the
   vector store. **Price and stock are deliberately *not* in it** — those are
   dynamic and would belong behind a (mocked) supplier API, fetched at runtime.
   Baking constantly-changing prices into a RAG corpus is the wrong shape.

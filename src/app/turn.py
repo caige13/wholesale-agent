@@ -46,7 +46,10 @@ def _compose_reply(result: AgentResult) -> str:
         return answer
     if result.clarifications:
         return "\n".join(result.clarifications)
-    return _summarize_cart(result.draft_cart)
+    summary = _summarize_cart(result.draft_cart)
+    if result.confirmation and not result.draft_cart.is_empty():
+        summary += f"\nOrder confirmed: {result.confirmation.order_id}"
+    return summary
 
 
 def _summarize_cart(cart: Cart) -> str:

@@ -26,7 +26,7 @@ def test_drafts_when_confidence_is_exactly_at_the_threshold():
 
 
 def test_clarifies_on_a_blocking_flag_even_at_high_confidence():
-    item = LineItem(sku="DELI-16", confidence=0.99, flags=[Flag.NEEDS_LIDS])
+    item = LineItem(sku="DELI-16", confidence=0.99, flags=[Flag.NEEDS_COMPANION])
     assert gate([item]) == "clarify"
 
 

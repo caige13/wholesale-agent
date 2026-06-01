@@ -110,6 +110,25 @@ def test_size_match_picks_the_best_scored_candidate_when_a_size_is_shared(make_c
     assert resolve_skus(item, candidates).sku == "DELI-16"
 
 
+def test_does_not_resolve_to_a_different_family_when_only_that_family_has_the_size(make_candidate):
+    # The catalog has no 12oz deli — only a 12oz hot cup. A size token alone must
+    # NOT pin the cup when the phrase names "deli"; it stays ambiguous so the gate
+    # asks ("we don't carry a 12oz deli — did you mean 8/16/32oz?") rather than
+    # silently shipping the wrong family. (Regression: the size match used to win.)
+    item = LineItem(raw_text="12oz deli containers")
+    candidates = [
+        make_candidate(score=0.82, sku="DELI-08", product_name="8oz Deli Container",
+                       aliases=["8oz deli container"], unit_size="8oz"),
+        make_candidate(score=0.80, sku="DELI-16", product_name="16oz Deli Container",
+                       aliases=["16oz deli container"], unit_size="16oz"),
+        make_candidate(score=0.78, sku="CUP-12", product_name="12oz Paper Hot Cup",
+                       aliases=["hot cup 12oz"], category="cups", unit_size="12oz"),
+    ]
+    out = resolve_skus(item, candidates)
+    assert out.sku != "CUP-12"
+    assert out.sku is None  # ambiguous → the gate clarifies
+
+
 def test_attaches_the_candidate_options_when_ambiguous(make_candidate):
     item = LineItem(raw_text="deli containers")
     candidates = [

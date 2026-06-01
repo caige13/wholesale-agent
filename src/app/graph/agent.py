@@ -28,4 +28,5 @@ class LangGraphOrderAgent:
             draft_cart=final.get("draft_cart") or cart,
             clarifications=final.get("clarifications", []),
             answer=final.get("answer"),
+            confirmation=final.get("confirmation"),
         )

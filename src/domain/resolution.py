@@ -85,16 +85,40 @@ def _candidate_for_sku(candidates: list[ResolutionCandidate], sku: str) -> Catal
 
 
 def _size_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
-    """Resolve when a phrase token names a candidate's unit_size ("16oz deli").
+    """Resolve a size token to a candidate's unit_size — but only within the family.
 
     Token (not substring) match so "16oz" doesn't spuriously match "6oz". A size
-    can be shared across families (a 16oz deli and a 16oz cup), so we return the
-    highest-scored size match and let the retriever's ranking break the tie. None
-    when the phrase names no size, so a genuine ambiguity ("deli containers") stays open.
+    can be shared across families (a 16oz deli and a 16oz cup), so a size token
+    only disambiguates among candidates that ALSO share a non-size descriptor word
+    with the phrase ("deli"); the best-scored of those wins, letting the retriever
+    break a within-family tie. If the size matches only a *different* family than
+    the phrase names — "12oz deli" when 12oz is a cup, not a deli — return None so
+    the phrase stays ambiguous and the gate asks, rather than silently shipping the
+    wrong family. None too when the phrase names no size ("deli containers").
     """
     tokens = phrase.split()
     sized = [c for c in candidates if c.item.unit_size.lower() in tokens]
-    return max(sized, key=lambda c: c.score).item if sized else None
+    if not sized:
+        return None
+    descriptors = {t for t in tokens if not _is_size_like(t)}
+    consistent = [c for c in sized if _name_tokens(c.item) & descriptors]
+    if not consistent:
+        return None
+    return max(consistent, key=lambda c: c.score).item
+
+
+def _is_size_like(token: str) -> bool:
+    """A measurement token (a size like "16oz", a bare count, or "oz") — not a
+    product-family word, so it can't corroborate the family of a size match."""
+    return token.isdigit() or token == "oz" or (token.endswith("oz") and token[:-2].isdigit())
+
+
+def _name_tokens(item: CatalogItem) -> set[str]:
+    """Lowercased word tokens from a candidate's product name and aliases."""
+    tokens = set(item.product_name.lower().split())
+    for alias in item.aliases:
+        tokens.update(alias.lower().split())
+    return tokens
 
 
 def _exact_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:

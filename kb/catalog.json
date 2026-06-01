@@ -7,7 +7,7 @@
     "unit_size": "8oz",
     "case_pack": 500,
     "min_order": 1,
-    "requires_lids": true,
+    "companion_skus": ["LID-DELI"],
     "supplier": "acme-foodservice"
   },
   {
@@ -18,7 +18,7 @@
     "unit_size": "16oz",
     "case_pack": 500,
     "min_order": 1,
-    "requires_lids": true,
+    "companion_skus": ["LID-DELI"],
     "supplier": "acme-foodservice"
   },
   {
@@ -29,7 +29,7 @@
     "unit_size": "32oz",
     "case_pack": 480,
     "min_order": 1,
-    "requires_lids": true,
+    "companion_skus": ["LID-DELI"],
     "supplier": "acme-foodservice"
   },
   {
@@ -40,7 +40,6 @@
     "unit_size": "2oz",
     "case_pack": 2500,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -51,7 +50,6 @@
     "unit_size": "4oz",
     "case_pack": 2500,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -62,7 +60,6 @@
     "unit_size": "fits 8-32oz",
     "case_pack": 500,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -73,7 +70,6 @@
     "unit_size": "fits 2-4oz",
     "case_pack": 2500,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -84,7 +80,6 @@
     "unit_size": "fits 10-16oz",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -95,7 +90,7 @@
     "unit_size": "12oz",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": true,
+    "companion_skus": ["LID-HOT"],
     "supplier": "acme-foodservice"
   },
   {
@@ -106,7 +101,7 @@
     "unit_size": "16oz",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": true,
+    "companion_skus": ["LID-HOT"],
     "supplier": "acme-foodservice"
   },
   {
@@ -117,7 +112,6 @@
     "unit_size": "40lb case",
     "case_pack": 200,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -128,7 +122,6 @@
     "unit_size": "40lb case",
     "case_pack": 165,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -139,7 +132,6 @@
     "unit_size": "1-ply",
     "case_pack": 3000,
     "min_order": 2,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -150,7 +142,6 @@
     "unit_size": "7.75in",
     "case_pack": 10000,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -161,7 +152,6 @@
     "unit_size": "medium",
     "case_pack": 500,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -172,7 +162,6 @@
     "unit_size": "heavyweight",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -183,7 +172,6 @@
     "unit_size": "medium",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -194,7 +182,6 @@
     "unit_size": "large",
     "case_pack": 1000,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -205,7 +192,6 @@
     "unit_size": "18in x 500ft",
     "case_pack": 1,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   },
   {
@@ -216,7 +202,6 @@
     "unit_size": "case of 30",
     "case_pack": 30,
     "min_order": 1,
-    "requires_lids": false,
     "supplier": "acme-foodservice"
   }
 ]

@@ -1,0 +1,22 @@
+[
+  {"sku": "DELI-08", "in_stock": true, "quantity_on_hand": 240, "lead_time_days": 2, "price": 34.50},
+  {"sku": "DELI-16", "in_stock": true, "quantity_on_hand": 180, "lead_time_days": 2, "price": 41.75},
+  {"sku": "DELI-32", "in_stock": true, "quantity_on_hand": 120, "lead_time_days": 3, "price": 52.00},
+  {"sku": "PCUP-2", "in_stock": true, "quantity_on_hand": 300, "lead_time_days": 2, "price": 18.25},
+  {"sku": "PCUP-4", "in_stock": true, "quantity_on_hand": 260, "lead_time_days": 2, "price": 21.50},
+  {"sku": "LID-DELI", "in_stock": true, "quantity_on_hand": 200, "lead_time_days": 2, "price": 12.00},
+  {"sku": "LID-PCUP", "in_stock": true, "quantity_on_hand": 220, "lead_time_days": 2, "price": 9.75},
+  {"sku": "LID-HOT", "in_stock": true, "quantity_on_hand": 190, "lead_time_days": 2, "price": 11.40},
+  {"sku": "CUP-12", "in_stock": true, "quantity_on_hand": 340, "lead_time_days": 2, "price": 28.90},
+  {"sku": "CUP-16C", "in_stock": true, "quantity_on_hand": 310, "lead_time_days": 2, "price": 31.20},
+  {"sku": "LIME-FRESH", "in_stock": false, "quantity_on_hand": 0, "lead_time_days": 5, "price": 46.00},
+  {"sku": "LEMON-FRESH", "in_stock": true, "quantity_on_hand": 60, "lead_time_days": 4, "price": 44.00},
+  {"sku": "NAPKIN-1", "in_stock": true, "quantity_on_hand": 500, "lead_time_days": 1, "price": 22.80},
+  {"sku": "STRAW-WRAP", "in_stock": true, "quantity_on_hand": 420, "lead_time_days": 1, "price": 16.60},
+  {"sku": "BAG-TG", "in_stock": true, "quantity_on_hand": 380, "lead_time_days": 2, "price": 24.30},
+  {"sku": "FORK-PLAS", "in_stock": true, "quantity_on_hand": 450, "lead_time_days": 1, "price": 19.95},
+  {"sku": "GLOVE-M", "in_stock": true, "quantity_on_hand": 270, "lead_time_days": 3, "price": 27.40},
+  {"sku": "GLOVE-L", "in_stock": true, "quantity_on_hand": 250, "lead_time_days": 3, "price": 27.40},
+  {"sku": "FOIL-ROLL", "in_stock": true, "quantity_on_hand": 140, "lead_time_days": 2, "price": 38.10},
+  {"sku": "TOWEL-ROLL", "in_stock": true, "quantity_on_hand": 160, "lead_time_days": 2, "price": 33.25}
+]

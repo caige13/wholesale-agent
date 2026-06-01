@@ -17,6 +17,7 @@ from src.app.graph.llm_nodes import (
 )
 from src.domain.cart import Cart
 from src.domain.models import CartOpKind, Intent
+from test.fakes import FakeCatalog
 
 
 class FakeStructuredModel:
@@ -42,11 +43,6 @@ class FakeChatModel:
 
     def invoke(self, _prompt):
         return SimpleNamespace(content=self._content)
-
-
-class FakeCatalog:
-    def find_candidates(self, query, k=5):
-        return []
 
 
 def test_intent_node_routes_to_the_classified_intent():

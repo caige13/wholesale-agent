@@ -14,7 +14,16 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from src.domain.models import CartOp, CartOpKind, Intent, LineItem, ResolutionCandidate
+from src.domain.cart import Cart
+from src.domain.companions import pending_companions
+from src.domain.models import (
+    CartOp,
+    CartOpKind,
+    Companion,
+    Intent,
+    LineItem,
+    ResolutionCandidate,
+)
 from src.ports import CatalogRepository
 
 if TYPE_CHECKING:
@@ -33,8 +42,21 @@ class ParsedItem(BaseModel):
     action: CartOpKind = CartOpKind.ADD
 
 
+class AcceptedCompanion(BaseModel):
+    """One offered add-on the user agreed to, picked from the pending offer."""
+
+    name: str  # the offered companion's product name, copied verbatim from the offer
+    # Cases, ONLY if the user stated an amount for this add-on ("just 2 cases of
+    # lids"); left null otherwise so add_companions sizes it deterministically.
+    quantity: int | None = None
+
+
 class ParsedOrder(BaseModel):
     items: list[ParsedItem] = Field(default_factory=list)
+    # The offered companion add-ons the user agreed to this turn — a closed-set
+    # pick from the pending offer (NOT free text). add_companions maps each name
+    # back to its exact SKU; empty means none accepted.
+    accepted_companions: list[AcceptedCompanion] = Field(default_factory=list)
 
 
 class IntentResult(BaseModel):
@@ -45,6 +67,8 @@ class IntentResult(BaseModel):
 _INTENT_INSTRUCTIONS = (
     "Classify the restaurant's message as one of: 'order' (placing/adding items), "
     "'reorder' (repeat a usual order), or 'question' (asking about a product). "
+    "A short reply that accepts or declines a pending add-on offer ('yes', 'yes "
+    "please', 'sure', 'add them', 'no thanks') is an 'order', not a 'question'.\n"
     "Message:\n"
 )
 _PARSE_INSTRUCTIONS = (
@@ -57,6 +81,15 @@ _PARSE_INSTRUCTIONS = (
     "states a new total — e.g. 'make it 3', 'change the deli to 3 cases'. Do NOT "
     "use 'add' for these; set the quantity to the new total.\n"
     "- 'remove' to drop an item that's in the cart ('drop the limes').\n\n"
+    "Pending add-on offer (the assistant already proposed adding these alongside "
+    "items in the cart):\n{offer}\n"
+    "If the user agrees to some or all of these add-ons ('yes', 'yes please', "
+    "'sure', 'add the lids but not the cups'), list each accepted one in "
+    "accepted_companions with its name copied verbatim from the offer — and a "
+    "quantity ONLY if the user states an amount for it ('just 2 cases of lids'); "
+    "otherwise leave its quantity null. If the user declines or doesn't mention "
+    "them, leave accepted_companions empty. Never re-add the parent item, and put "
+    "accepted add-ons ONLY in accepted_companions, never in items.\n\n"
     "Current cart:\n{cart}\n\nMessage:\n{message}"
 )
 _QA_INSTRUCTIONS = (
@@ -74,8 +107,11 @@ def intent_node(state: dict, model: BaseChatModel) -> dict:
 
 
 def parse_node(state: dict, model: BaseChatModel) -> dict:
+    pending = pending_companions(state.get("draft_cart") or Cart())
     prompt = _format_history(state.get("history")) + _PARSE_INSTRUCTIONS.format(
-        cart=_cart_context(state.get("draft_cart")), message=state["clean_message"]
+        cart=_cart_context(state.get("draft_cart")),
+        offer=_offer_context(pending),
+        message=state["clean_message"],
     )
     parsed = model.with_structured_output(ParsedOrder).invoke(prompt)
     cart_ops = [
@@ -87,7 +123,15 @@ def parse_node(state: dict, model: BaseChatModel) -> dict:
         )
         for item in parsed.items
     ]
-    return {"cart_ops": cart_ops}
+    accepted = [{"name": a.name, "quantity": a.quantity} for a in parsed.accepted_companions]
+    return {"cart_ops": cart_ops, "accepted_companions": accepted}
+
+
+def _offer_context(pending: list[Companion]) -> str:
+    """Render the still-open add-on offer so the model picks from a closed set."""
+    if not pending:
+        return "(none)"
+    return "\n".join(f"- {companion.product_name}" for companion in pending)
 
 
 def _format_history(history: list[dict] | None) -> str:

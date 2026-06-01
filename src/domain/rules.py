@@ -2,8 +2,8 @@
 
 Pure function: given a line and its catalog item, return a new line with the
 quantity rounded to whole cases and the catalog-derived flags raised. Only rules
-that depend on *static* catalog data live here (case packs, minimums, lids).
-Out-of-stock is dynamic supplier-API data and is set elsewhere.
+that depend on *static* catalog data live here (case packs, minimums,
+companions). Out-of-stock is dynamic supplier-API data and is set elsewhere.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ def validate_rules(item: LineItem, catalog_item: CatalogItem) -> LineItem:
     if quantity is not None and quantity < catalog_item.min_order:
         _raise(flags, Flag.BELOW_MINIMUM)
 
-    if catalog_item.requires_lids:
-        _raise(flags, Flag.NEEDS_LIDS)
+    if catalog_item.companion_skus:
+        _raise(flags, Flag.NEEDS_COMPANION)
 
     return item.model_copy(update={"quantity": quantity, "flags": flags})
 

@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 from src.domain.cart import Cart
+from src.domain.models import OrderConfirmation
 
 
 class AgentResult(BaseModel):
@@ -21,11 +22,13 @@ class AgentResult(BaseModel):
     The agent owns the cart and the decision of what to say; it returns the raw
     pieces and lets the UX boundary compose the chat reply. ``draft_cart`` is the
     full (persisted) cart after this turn — unchanged on a question turn.
+    ``confirmation`` is set only when the order drafts cleanly (the supplier ack).
     """
 
     draft_cart: Cart = Field(default_factory=Cart)
     clarifications: list[str] = Field(default_factory=list)
     answer: str | None = None
+    confirmation: OrderConfirmation | None = None
 
 
 @runtime_checkable

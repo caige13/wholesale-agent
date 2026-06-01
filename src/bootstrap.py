@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from langchain_core.embeddings import Embeddings
 
-from src.adapters import JsonCatalogRepository
+from src.adapters import JsonCatalogRepository, MockSupplierGateway
 from src.adapters.faiss_catalog_repository import FaissCatalogRepository
 from src.config import get_settings
-from src.ports import CatalogRepository
+from src.ports import CatalogRepository, SupplierGateway
 
 
 def build_embeddings() -> Embeddings:
@@ -29,6 +29,11 @@ def build_catalog_repository(embeddings: Embeddings | None = None) -> CatalogRep
     """Load kb/catalog.json and index it for semantic retrieval."""
     items = JsonCatalogRepository().all()
     return FaissCatalogRepository(items, embeddings or build_embeddings())
+
+
+def build_supplier_gateway() -> SupplierGateway:
+    """The keyless JSON-backed supplier gateway (price / stock / order submission)."""
+    return MockSupplierGateway()
 
 
 def build_chat_model():
@@ -74,5 +79,10 @@ def build_agent(item_memory: dict[str, str] | None = None):
     from src.app.graph.agent import LangGraphOrderAgent
     from src.app.graph.graph import build_graph
 
-    graph = build_graph(build_chat_model(), build_catalog_repository(), item_memory)
+    graph = build_graph(
+        build_chat_model(),
+        build_catalog_repository(),
+        build_supplier_gateway(),
+        item_memory,
+    )
     return LangGraphOrderAgent(graph)

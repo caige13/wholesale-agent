@@ -29,7 +29,7 @@ def make_catalog_item() -> Callable[..., CatalogItem]:
         unit_size: str = "16oz",
         case_pack: int = 500,
         min_order: int = 1,
-        requires_lids: bool = False,
+        companion_skus: list[str] | None = None,
         supplier: str = SUPPLIER,
     ) -> CatalogItem:
         return CatalogItem(
@@ -40,7 +40,7 @@ def make_catalog_item() -> Callable[..., CatalogItem]:
             unit_size=unit_size,
             case_pack=case_pack,
             min_order=min_order,
-            requires_lids=requires_lids,
+            companion_skus=companion_skus or [],
             supplier=supplier,
         )
 

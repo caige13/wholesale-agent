@@ -41,7 +41,9 @@ def test_items_carry_no_price_or_stock(catalog_repo: JsonCatalogRepository):
     assert not hasattr(item, "in_stock")
 
 
-def test_an_ambiguous_phrase_resolves_to_multiple_size_variants(catalog_repo: JsonCatalogRepository):
+def test_an_ambiguous_phrase_resolves_to_multiple_size_variants(
+    catalog_repo: JsonCatalogRepository,
+):
     # "deli containers" must be genuinely ambiguous for the clarification eval.
     deli = [i for i in catalog_repo.all() if "deli container" in i.product_name.lower()]
     assert len({i.unit_size for i in deli}) >= 2

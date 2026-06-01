@@ -16,7 +16,7 @@ from operator import add
 from typing import Annotated, TypedDict
 
 from src.domain.cart import Cart
-from src.domain.models import CartOp, Intent, OrderStatus
+from src.domain.models import CartOp, Intent, OrderConfirmation, OrderStatus
 
 
 class OrderState(TypedDict, total=False):
@@ -34,8 +34,12 @@ class OrderState(TypedDict, total=False):
     # The per-turn operations (add/set_quantity/remove). parse_order produces them;
     # resolve/validate enrich each op's item; apply folds them into the cart.
     cart_ops: list[CartOp]
+    # Add-on offers the user accepted this turn: [{"name", "quantity"}]. parse_order
+    # fills it from the pending offer; add_companions turns it into ADD ops by SKU.
+    accepted_companions: list[dict]
 
     draft_cart: Cart  # the running cart — PERSISTS across turns
     clarifications: Annotated[list[str], add]  # accumulates within a turn
     answer: str | None  # set on the question path; cart left untouched
     status: OrderStatus
+    confirmation: OrderConfirmation | None  # supplier ack, set when the order drafts

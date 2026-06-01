@@ -33,7 +33,10 @@ class CatalogItem(BaseModel):
     unit_size: str  # human-readable, e.g. "16oz" or "case of 500"
     case_pack: int = Field(gt=0)  # units per case; a divisor in validate_rules
     min_order: int = Field(default=1, gt=0)  # minimum number of cases per order
-    requires_lids: bool = False
+    # SKUs this item should be paired with (e.g. a container -> its lid). Drives
+    # the generic "needs matching X — add them?" upsell; empty means no companion.
+    # Data, not code: a new pairing is a catalog edit, never a code branch.
+    companion_skus: list[str] = Field(default_factory=list)
     supplier: str  # supplier-keyed from day 1 (Stage-2 seam)
 
 
@@ -52,7 +55,7 @@ class ResolutionCandidate(BaseModel):
 class Flag(StrEnum):
     """Per-line conditions raised during the pipeline.
 
-    ``validate_rules`` sets the static-catalog flags (``NEEDS_LIDS``,
+    ``validate_rules`` sets the static-catalog flags (``NEEDS_COMPANION``,
     ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``); ``OUT_OF_STOCK`` is set by the
     inventory check against the supplier API. Some flags are *blocking* (the gate
     clarifies on them even at high confidence); ``ROUNDED_TO_CASE_PACK`` is
@@ -60,11 +63,23 @@ class Flag(StrEnum):
     the gate owns that policy, not the domain.
     """
 
-    NEEDS_LIDS = "needs_lids"
+    NEEDS_COMPANION = "needs_companion"
     OUT_OF_STOCK = "out_of_stock"
     AMBIGUOUS_SIZE = "ambiguous_size"
     BELOW_MINIMUM = "below_minimum"
     ROUNDED_TO_CASE_PACK = "rounded_to_case_pack"
+
+
+class Companion(BaseModel):
+    """A suggested add-on for a line: the companion's SKU plus its display name.
+
+    Carried on the parent line (set during validation from the catalog) so the
+    clarifying question can name it and a later "yes" can be mapped back to the
+    exact SKU — no fuzzy re-resolution of the user's reply.
+    """
+
+    sku: str
+    product_name: str
 
 
 class LineItem(BaseModel):
@@ -91,6 +106,10 @@ class LineItem(BaseModel):
     # When resolution is ambiguous, the candidate product names to offer the user
     # ("did you mean 8oz, 16oz, or 32oz?"). Empty once resolved.
     options: list[str] = Field(default_factory=list)
+    # Suggested add-ons for this line (set by validation from the catalog's
+    # companion_skus, minus any already in the cart). Drives the "needs matching
+    # X — add them?" question and lets a later "yes" resolve to the exact SKU.
+    companions: list[Companion] = Field(default_factory=list)
 
 
 class CartOpKind(StrEnum):
@@ -108,6 +127,26 @@ class CartOp(BaseModel):
 
     op: CartOpKind
     item: LineItem
+
+
+class InventoryStatus(BaseModel):
+    """Dynamic stock picture for one SKU, from the supplier API (not the catalog).
+
+    ``check_inventory`` sets ``OUT_OF_STOCK`` when ``in_stock`` is false;
+    ``lead_time_days`` is the restock ETA the clarification can quote.
+    """
+
+    in_stock: bool
+    quantity_on_hand: int = 0
+    lead_time_days: int = 0
+
+
+class OrderConfirmation(BaseModel):
+    """The supplier's acknowledgement of a submitted order."""
+
+    order_id: str
+    supplier: str
+    total: float | None = None
 
 
 class Intent(StrEnum):

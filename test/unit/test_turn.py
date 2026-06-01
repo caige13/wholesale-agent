@@ -11,20 +11,7 @@ from src.app.turn import TurnResult, handle_turn
 from src.domain.cart import Cart
 from src.domain.models import LineItem
 from src.ports.order_agent import AgentResult
-
-
-class FakeOrderAgent:
-    """Stub agent: returns a preset AgentResult and records how it was called."""
-
-    def __init__(self, result: AgentResult):
-        self._result = result
-        self.calls: list[tuple[str, Cart]] = []
-        self.last_history = None
-
-    def run(self, message: str, cart: Cart, history=None) -> AgentResult:
-        self.calls.append((message, cart))
-        self.last_history = history
-        return self._result
+from test.fakes import FakeOrderAgent
 
 
 def _deli_line(quantity: int = 3) -> LineItem:
@@ -40,7 +27,7 @@ def test_delegates_the_message_and_cart_to_the_agent():
     cart = Cart()
     agent = FakeOrderAgent(AgentResult(draft_cart=cart))
     handle_turn("2 cases of straws", cart, agent)
-    assert agent.calls == [("2 cases of straws", Cart())]
+    assert agent.calls == [("2 cases of straws", Cart(), None)]
 
 
 def test_returns_a_turn_result():
