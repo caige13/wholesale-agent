@@ -33,6 +33,21 @@ _EXAMPLES = [
     "I need some deli containers",
 ]
 
+# A friendly opening line so the chat isn't a blank slate on load. It's seeded as
+# the first assistant bubble and restored by "New ticket". The seam tests pass
+# their own history, so this only shapes the live shell; once the user replies it
+# simply rides along as the conversation's opening turn (harmless context).
+_GREETING = (
+    "Welcome to the Order Desk. Tell me what you need and I'll draft the order — "
+    "say something like “3 cases of 16oz deli containers and some salsa cups.” "
+    "I can also answer questions about pack sizes, pricing, and availability."
+)
+
+
+def _initial_history() -> list[dict]:
+    """The chat's seeded state: a single assistant greeting bubble."""
+    return [{"role": "assistant", "content": _GREETING}]
+
 
 # --- the seam the Gradio callback delegates to ---------------------------
 
@@ -604,7 +619,7 @@ def build_app(agent: OrderAgent):
         yield history, (new_cart if not words else gr.skip()), gr.skip()
 
     def reset():
-        return [], Cart(), ""
+        return _initial_history(), Cart(), ""
 
     def cart_panel(cart: Cart):
         """Render the cart panel — read-only slip text plus an inline −/+/✕ control
@@ -654,6 +669,7 @@ def build_app(agent: OrderAgent):
         with gr.Row(equal_height=False):
             with gr.Column(scale=3):
                 chat = gr.Chatbot(
+                    value=_initial_history(),
                     elem_id="deskchat",
                     height=440,
                     show_label=False,
