@@ -174,17 +174,26 @@ def _without(flags: list[Flag], flag: Flag) -> list[Flag]:
 
 def apply_node(state: dict) -> dict:
     cart: Cart = state.get("draft_cart") or Cart()
-    ops = [op for op in state.get("cart_ops", []) if op.item.sku]  # skip unresolved
+    # Skip unresolved lines and quantity-less adds — the gate clarifies on those
+    # instead of landing a half-line ("I want salsa cups" → ask how many first).
+    ops = [
+        op
+        for op in state.get("cart_ops", [])
+        if op.item.sku and not (op.op is CartOpKind.ADD and op.item.quantity is None)
+    ]
     return {"draft_cart": cart.apply(ops)}
 
 
 def draft_node(state: dict, supplier: SupplierGateway) -> dict:
-    """Submit the drafted cart to the supplier and stash the confirmation. Only
-    reached on the clean (non-clarify) path, so the order is ready to place.
+    """Finalize the clean (non-clarify) path. Submit to the supplier ONLY when the
+    user asked to place the order (``place_order``); otherwise leave the running
+    draft untouched so they can keep adding items across turns — never auto-confirm.
     """
     cart: Cart = state.get("draft_cart") or Cart()
+    if not state.get("place_order") or cart.is_empty():
+        return {"status": OrderStatus.DRAFTED}
     confirmation = supplier.submit_order(cart.all_lines())
-    return {"status": OrderStatus.DRAFTED, "confirmation": confirmation}
+    return {"status": OrderStatus.SUBMITTED, "confirmation": confirmation}
 
 
 def clarify_node(state: dict) -> dict:
@@ -212,7 +221,9 @@ def build_clarifications(line_items: list[LineItem]) -> list[str]:
                 )
             continue
         blocking = [flag for flag in line.flags if flag in BLOCKING_FLAGS]
-        if Flag.NEEDS_COMPANION in blocking:
+        if Flag.MISSING_QUANTITY in blocking:
+            questions.append(f"How many cases of {label} would you like?")
+        elif Flag.NEEDS_COMPANION in blocking:
             if line.companions:
                 names = _join_options([c.product_name for c in line.companions])
                 questions.append(f"{label} needs matching {names} — should I add them?")

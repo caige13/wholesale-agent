@@ -56,17 +56,18 @@ class Flag(StrEnum):
     """Per-line conditions raised during the pipeline.
 
     ``validate_rules`` sets the static-catalog flags (``NEEDS_COMPANION``,
-    ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``); ``OUT_OF_STOCK`` is set by the
-    inventory check against the supplier API. Some flags are *blocking* (the gate
-    clarifies on them even at high confidence); ``ROUNDED_TO_CASE_PACK`` is
-    informational only. The blocking set lives in ``src.domain.policies`` so
-    the gate owns that policy, not the domain.
+    ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``) plus ``MISSING_QUANTITY`` when a
+    resolved line has no amount; ``OUT_OF_STOCK`` is set by the inventory check
+    against the supplier API. Some flags are *blocking* (the gate clarifies on them
+    even at high confidence); ``ROUNDED_TO_CASE_PACK`` is informational only. The
+    blocking set lives in ``src.domain.policies`` so the gate owns that policy.
     """
 
     NEEDS_COMPANION = "needs_companion"
     OUT_OF_STOCK = "out_of_stock"
     AMBIGUOUS_SIZE = "ambiguous_size"
     BELOW_MINIMUM = "below_minimum"
+    MISSING_QUANTITY = "missing_quantity"
     ROUNDED_TO_CASE_PACK = "rounded_to_case_pack"
 
 

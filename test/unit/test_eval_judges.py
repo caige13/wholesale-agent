@@ -7,7 +7,13 @@ unit-tested here (keyless), and the eval runner just applies them.
 
 from types import SimpleNamespace
 
-from evals.judges import JudgeVerdict, answer_faithfulness, clarification_correct, extraction_score
+from evals.judges import (
+    JudgeVerdict,
+    answer_faithfulness,
+    clarification_correct,
+    extraction_score,
+    submission_correct,
+)
 from src.domain.cart import Cart
 from src.domain.models import LineItem
 
@@ -63,6 +69,14 @@ def test_clarification_is_correct_only_when_asking_matches_expectation():
     assert clarification_correct(expected=False, asked=False) is True
     assert clarification_correct(expected=True, asked=False) is False
     assert clarification_correct(expected=False, asked=True) is False
+
+
+def test_submission_is_correct_only_when_placing_matches_expectation():
+    # a running draft must not submit; an explicit checkout must
+    assert submission_correct(expected=False, submitted=False) is True  # draft kept
+    assert submission_correct(expected=True, submitted=True) is True  # placed on checkout
+    assert submission_correct(expected=True, submitted=False) is False  # failed to place
+    assert submission_correct(expected=False, submitted=True) is False  # premature confirm
 
 
 def test_answer_faithfulness_returns_the_judge_verdict():

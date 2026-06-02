@@ -39,6 +39,16 @@ def clarification_correct(expected: bool, asked: bool) -> bool:
     return expected == asked
 
 
+def submission_correct(expected: bool, submitted: bool) -> bool:
+    """Draft vs. place: did the agent submit the order exactly when the user asked to?
+
+    A clean turn builds a *running draft* and must never auto-confirm; the supplier
+    is only called when the user explicitly checks out ("that's it", "place the
+    order"). ``submitted`` is whether the agent produced a supplier confirmation.
+    """
+    return expected == submitted
+
+
 class JudgeVerdict(BaseModel):
     """An LLM judge's structured verdict on an open-ended answer."""
 

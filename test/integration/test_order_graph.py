@@ -71,21 +71,46 @@ def test_out_of_stock_order_drafts_the_line_but_asks_to_clarify():
     assert [li.sku for li in result.draft_cart.all_lines()] == ["LIME-FRESH"]
 
 
-def test_clean_order_fills_unit_price_and_confirms_the_order():
+def test_a_clean_order_builds_a_draft_but_does_not_confirm_until_placed():
+    # Adding an item never auto-submits — the cart is a running draft (the bug:
+    # it used to confirm every clean turn, so "I wasn't done" got a second order).
     straw = _item("STRAW-WRAP", "Wrapped Straws", min_order=1)
     catalog = FakeCatalog(
         items_by_sku={"STRAW-WRAP": straw},
         candidates_by_phrase={"wrapped straws": [ResolutionCandidate(item=straw, score=0.95)]},
     )
-    parsed = ParsedOrder(items=[ParsedItem(phrase="wrapped straws", quantity=2)])
+    parsed = ParsedOrder(items=[ParsedItem(phrase="wrapped straws", quantity=2)])  # no checkout
+    result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("2 cases of straws", Cart())
+    assert [li.sku for li in result.draft_cart.all_lines()] == ["STRAW-WRAP"]  # cart built
+    assert result.confirmation is None  # but NOT submitted
+
+
+def test_placing_the_order_fills_unit_price_and_confirms():
+    straw = _item("STRAW-WRAP", "Wrapped Straws", min_order=1)
+    catalog = FakeCatalog(
+        items_by_sku={"STRAW-WRAP": straw},
+        candidates_by_phrase={"wrapped straws": [ResolutionCandidate(item=straw, score=0.95)]},
+    )
+    # "2 cases of straws, that's it" — adds the item AND places the order.
+    parsed = ParsedOrder(
+        items=[ParsedItem(phrase="wrapped straws", quantity=2)], place_order=True
+    )
     supplier = FakeSupplier(prices={"STRAW-WRAP": 16.60})
     result = _agent(
         Intent.ORDER, parsed=parsed, catalog=catalog, supplier=supplier
-    ).run("2 cases of straws", Cart())
+    ).run("2 cases of straws, that's it", Cart())
     assert result.clarifications == []
     assert result.draft_cart.all_lines()[0].unit_price == 16.60
     assert result.confirmation is not None
     assert result.confirmation.order_id == "TEST-ORDER"
+
+
+def test_placing_the_order_with_no_new_items_submits_the_existing_cart():
+    existing = LineItem(sku="STRAW-WRAP", product_name="Wrapped Straws", supplier=S, quantity=2)
+    cart = Cart(by_supplier={S: [existing]})
+    result = _agent(Intent.ORDER, parsed=ParsedOrder(place_order=True)).run("place the order", cart)
+    assert result.confirmation is not None  # the running draft is submitted on checkout
+    assert [li.sku for li in result.draft_cart.all_lines()] == ["STRAW-WRAP"]  # unchanged
 
 
 def test_ambiguous_order_asks_for_clarification():
@@ -207,3 +232,16 @@ def test_declining_or_vague_reply_leaves_the_offer_open_without_adding():
         "hmm, maybe later", _cart_with_pending_lid()
     )
     assert [li.sku for li in result.draft_cart.all_lines()] == ["DELI-32"]  # no lid forced on
+
+
+def test_adding_an_item_without_a_quantity_asks_how_many_and_does_not_draft():
+    cup = _item("PCUP-2", "2oz Portion Cup", aliases=["salsa cups"])
+    catalog = FakeCatalog(
+        items_by_sku={"PCUP-2": cup},
+        candidates_by_phrase={"salsa cups": [ResolutionCandidate(item=cup, score=0.95)]},
+    )
+    parsed = ParsedOrder(items=[ParsedItem(phrase="salsa cups")])  # resolves, but no quantity
+    result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("I want salsa cups", Cart())
+    assert result.clarifications  # asks "how many?"
+    assert result.draft_cart.is_empty()  # no quantity-less line landed
+    assert result.confirmation is None  # and it did not draft/confirm

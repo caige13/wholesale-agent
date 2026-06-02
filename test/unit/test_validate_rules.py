@@ -34,6 +34,22 @@ def test_does_not_flag_below_minimum_when_quantity_meets_min_order(make_catalog_
     assert Flag.BELOW_MINIMUM not in out.flags
 
 
+def test_flags_missing_quantity_when_no_amount_is_given(make_catalog_item):
+    out = validate_rules(LineItem(sku="X"), make_catalog_item())
+    assert Flag.MISSING_QUANTITY in out.flags
+
+
+def test_does_not_flag_missing_quantity_when_a_quantity_is_given(make_catalog_item):
+    out = validate_rules(LineItem(sku="X", quantity=2), make_catalog_item())
+    assert Flag.MISSING_QUANTITY not in out.flags
+
+
+def test_does_not_flag_missing_quantity_when_ordered_in_units(make_catalog_item):
+    # A unit count rounds up into a case quantity, so it isn't "missing".
+    out = validate_rules(LineItem(sku="X", unit_quantity=1000), make_catalog_item(case_pack=500))
+    assert Flag.MISSING_QUANTITY not in out.flags
+
+
 def test_flags_needs_companion_when_item_has_companions(make_catalog_item):
     item = make_catalog_item(companion_skus=["LID-DELI"])
     out = validate_rules(LineItem(sku="DELI-16", quantity=3), item)

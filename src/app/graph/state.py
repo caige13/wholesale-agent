@@ -37,6 +37,9 @@ class OrderState(TypedDict, total=False):
     # Add-on offers the user accepted this turn: [{"name", "quantity"}]. parse_order
     # fills it from the pending offer; add_companions turns it into ADD ops by SKU.
     accepted_companions: list[dict]
+    # Set by parse_order when the user asks to finish/submit; draft submits only then,
+    # otherwise the cart is left as a running draft to keep building across turns.
+    place_order: bool
 
     draft_cart: Cart  # the running cart — PERSISTS across turns
     clarifications: Annotated[list[str], add]  # accumulates within a turn

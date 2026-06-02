@@ -22,6 +22,7 @@ BLOCKING_FLAGS = frozenset(
         Flag.OUT_OF_STOCK,
         Flag.NEEDS_COMPANION,
         Flag.BELOW_MINIMUM,
+        Flag.MISSING_QUANTITY,
     }
 )
 

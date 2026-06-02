@@ -9,7 +9,7 @@ on a question turn (spec §11). The inner agent is stubbed; its contract
 
 from src.app.turn import TurnResult, handle_turn
 from src.domain.cart import Cart
-from src.domain.models import LineItem
+from src.domain.models import LineItem, OrderConfirmation
 from src.ports.order_agent import AgentResult
 from test.fakes import FakeOrderAgent
 
@@ -100,3 +100,21 @@ def test_summarizes_a_partial_line_without_printing_none():
     result = handle_turn("...", cart, agent)
     assert "None" not in result.reply
     assert "DELI-16" in result.reply
+
+
+def test_invites_checkout_on_an_unplaced_draft():
+    # A non-empty draft with no confirmation should nudge toward placing the order.
+    cart = Cart(by_supplier={"acme-foodservice": [_deli_line(3)]})
+    agent = FakeOrderAgent(AgentResult(draft_cart=cart))  # no confirmation
+    result = handle_turn("add deli", Cart(), agent)
+    assert "place the order" in result.reply
+    assert "Order confirmed" not in result.reply
+
+
+def test_shows_the_confirmation_when_the_order_is_placed():
+    cart = Cart(by_supplier={"acme-foodservice": [_deli_line(3)]})
+    confirmation = OrderConfirmation(order_id="ACME-1", supplier="acme-foodservice")
+    agent = FakeOrderAgent(AgentResult(draft_cart=cart, confirmation=confirmation))
+    result = handle_turn("place it", cart, agent)
+    assert "Order confirmed: ACME-1" in result.reply
+    assert "place the order?" not in result.reply

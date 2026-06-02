@@ -23,6 +23,11 @@ def validate_rules(item: LineItem, catalog_item: CatalogItem) -> LineItem:
         if item.unit_quantity % catalog_item.case_pack != 0:
             _raise(flags, Flag.ROUNDED_TO_CASE_PACK)
 
+    # No amount stated ("I want salsa cups") → ask how many rather than draft an
+    # order for an unspecified quantity. Blocking, so the gate clarifies.
+    if quantity is None:
+        _raise(flags, Flag.MISSING_QUANTITY)
+
     if quantity is not None and quantity < catalog_item.min_order:
         _raise(flags, Flag.BELOW_MINIMUM)
 

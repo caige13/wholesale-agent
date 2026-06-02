@@ -121,6 +121,14 @@ def test_apply_node_skips_ops_whose_item_is_unresolved():
     assert out["draft_cart"].is_empty()
 
 
+def test_apply_node_skips_an_add_with_no_quantity():
+    # "I want salsa cups" resolves but has no amount — don't land a half-line; the
+    # gate clarifies "how many?" instead.
+    op = _add(LineItem(raw_text="salsa cups", sku="PCUP-2", supplier=S, quantity=None))
+    out = apply_node({"cart_ops": [op], "draft_cart": Cart()})
+    assert out["draft_cart"].is_empty()
+
+
 def test_clarify_node_produces_questions_and_sets_status():
     op = _add(LineItem(raw_text="deli containers", confidence=0.3))
     out = clarify_node({"cart_ops": [op]})
@@ -128,9 +136,17 @@ def test_clarify_node_produces_questions_and_sets_status():
     assert out["status"] == OrderStatus.NEEDS_CLARIFICATION
 
 
-def test_draft_node_sets_status_to_drafted_and_confirms_the_order():
-    out = draft_node({}, FakeSupplier())
+def test_draft_node_does_not_submit_a_running_draft_when_not_placing():
+    cart = Cart(by_supplier={S: [LineItem(sku="DELI-16", supplier=S, quantity=2)]})
+    out = draft_node({"draft_cart": cart}, FakeSupplier())
     assert out["status"] == OrderStatus.DRAFTED
+    assert "confirmation" not in out  # nothing submitted — it's still a draft
+
+
+def test_draft_node_submits_and_confirms_when_the_user_places_the_order():
+    cart = Cart(by_supplier={S: [LineItem(sku="DELI-16", supplier=S, quantity=2)]})
+    out = draft_node({"draft_cart": cart, "place_order": True}, FakeSupplier())
+    assert out["status"] == OrderStatus.SUBMITTED
     assert out["confirmation"].order_id == "TEST-ORDER"
 
 
@@ -162,8 +178,18 @@ def test_build_clarifications_names_the_companion_in_a_blocking_flag_question():
     assert "Deli Container Lid" in questions[0]
 
 
+def test_build_clarifications_asks_how_many_for_a_missing_quantity():
+    line = LineItem(
+        raw_text="salsa cups", sku="PCUP-2", product_name="2oz Portion Cup",
+        confidence=0.9, flags=[Flag.MISSING_QUANTITY],
+    )
+    question = build_clarifications([line])[0]
+    assert "How many" in question
+    assert "2oz Portion Cup" in question
+
+
 def test_build_clarifications_is_silent_for_clean_items():
-    line = LineItem(raw_text="straws", sku="STRAW-WRAP", confidence=0.95)
+    line = LineItem(raw_text="straws", sku="STRAW-WRAP", confidence=0.95, quantity=2)
     assert build_clarifications([line]) == []
 
 

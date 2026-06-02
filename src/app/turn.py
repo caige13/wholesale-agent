@@ -47,9 +47,12 @@ def _compose_reply(result: AgentResult) -> str:
     if result.clarifications:
         return "\n".join(result.clarifications)
     summary = _summarize_cart(result.draft_cart)
-    if result.confirmation and not result.draft_cart.is_empty():
-        summary += f"\nOrder confirmed: {result.confirmation.order_id}"
-    return summary
+    if result.draft_cart.is_empty():
+        return summary
+    if result.confirmation:
+        return summary + f"\nOrder confirmed: {result.confirmation.order_id}"
+    # A running draft, not yet placed — invite the next item or an explicit checkout.
+    return summary + "\nAnything else, or should I place the order?"
 
 
 def _summarize_cart(cart: Cart) -> str:

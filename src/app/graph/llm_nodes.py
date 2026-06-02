@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 class ParsedItem(BaseModel):
     """One requested change to the order, extracted from the message."""
 
-    phrase: str  # the product phrase as the user said it, e.g. "16oz deli"
+    phrase: str  # product phrase, typos corrected to standard wording ("16oz deli")
     quantity: int | None = None  # number of cases, if stated
     unit_quantity: int | None = None  # raw unit count, if stated ("1200 containers")
     # add a new/more of an item, set_quantity to change an existing line to an
@@ -57,6 +57,10 @@ class ParsedOrder(BaseModel):
     # pick from the pending offer (NOT free text). add_companions maps each name
     # back to its exact SKU; empty means none accepted.
     accepted_companions: list[AcceptedCompanion] = Field(default_factory=list)
+    # True only when the user signals they are finished and want the order placed
+    # ("that's it", "place the order", "I'm done"). Drives submission; otherwise the
+    # cart is kept as a running draft so they can keep adding across turns.
+    place_order: bool = False
 
 
 class IntentResult(BaseModel):
@@ -73,7 +77,10 @@ _INTENT_INSTRUCTIONS = (
 )
 _PARSE_INSTRUCTIONS = (
     "Extract the changes the restaurant wants to make to its order. For each item "
-    "give the product phrase as said, and either the number of cases (quantity) or "
+    "give the product phrase, correcting obvious spelling/spacing typos to the "
+    "catalog's standard wording (e.g. '16 ounze deli ocntainers' → '16oz deli "
+    "container') — but do NOT add detail the user didn't give (if they didn't state "
+    "a size, don't invent one). Also give either the number of cases (quantity) or "
     "a raw unit count (unit_quantity) if ordered in units.\n"
     "Choose an action per item:\n"
     "- 'add' for a new item or more of something.\n"
@@ -90,7 +97,12 @@ _PARSE_INSTRUCTIONS = (
     "otherwise leave its quantity null. If the user declines or doesn't mention "
     "them, leave accepted_companions empty. Never re-add the parent item, and put "
     "accepted add-ons ONLY in accepted_companions, never in items.\n\n"
-    "Current cart:\n{cart}\n\nMessage:\n{message}"
+    "Set place_order to true ONLY when the user signals they are finished and want "
+    "the order submitted ('that's it', 'place the order', 'I'm done', 'submit it', "
+    "'check out'). Accepting an add-on offer ('yes please') is NOT placing the order. "
+    "Adding/removing/changing items keeps place_order false unless they also say "
+    "they're done (e.g. 'add napkins and that's it' → add napkins AND place_order=true)."
+    "\n\nCurrent cart:\n{cart}\n\nMessage:\n{message}"
 )
 _QA_INSTRUCTIONS = (
     "Answer the restaurant's product question using only the catalog context. Be "
@@ -124,7 +136,11 @@ def parse_node(state: dict, model: BaseChatModel) -> dict:
         for item in parsed.items
     ]
     accepted = [{"name": a.name, "quantity": a.quantity} for a in parsed.accepted_companions]
-    return {"cart_ops": cart_ops, "accepted_companions": accepted}
+    return {
+        "cart_ops": cart_ops,
+        "accepted_companions": accepted,
+        "place_order": parsed.place_order,
+    }
 
 
 def _offer_context(pending: list[Companion]) -> str:

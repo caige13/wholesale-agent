@@ -13,8 +13,8 @@ the LLM nodes, and **LangSmith** for tracing + evals.
 
 1. **Ask only when unsure.** A confidence gate proceeds autonomously on a clean
    order and asks a clarifying question *only* when an item is low-confidence or
-   carries a blocking flag (ambiguous size, needs a companion add-on, below
-   minimum, out of stock). When it
+   carries a blocking flag (ambiguous size, missing quantity, needs a companion
+   add-on, below minimum, out of stock). When it
    asks, it enumerates the real options ("did you mean 8oz, 16oz, or 32oz?").
 2. **An iterative, context-aware cart.** You add to, change quantities in, and
    remove from a running cart across turns, and can interleave product questions
@@ -67,11 +67,11 @@ graph TD
     parse --> resolve[resolve_skus<br/>retriever candidates -> SKU + confidence]
     resolve --> companions[add_companions<br/>accepted offer -> ADD by SKU · qty = companion_case_count]
     companions --> inv[check_inventory<br/>unit price · out_of_stock]
-    inv --> validate[validate_rules<br/>case-pack · minimum · companions]
+    inv --> validate[validate_rules<br/>case-pack · minimum · quantity · companions]
     validate --> apply[apply cart_ops<br/>add / set_quantity / remove]
     apply --> gate{needs clarification?}
     gate -->|low confidence or blocking flag| clarify[ask_clarifying]
-    gate -->|clean| draft[create_draft]
+    gate -->|clean| draft[draft<br/>submit only on checkout]
     ragqa --> done([Final response])
     clarify --> done
     draft --> done
@@ -90,6 +90,11 @@ SKU(s) — sized deterministically by `companion_case_count`, never re-resolved 
 free text. A new item that itself needs a companion just raises its own offer next
 turn, so add → offer → accept → offer-the-next continues across turns until a turn
 needs no question and the gate drafts. Adding a pairing is a catalog edit, not code.
+
+**Draft vs. place order.** A clean turn builds a *running draft* and never auto-submits
+— it asks "anything else, or should I place the order?". `submit_order` fires only when
+the user explicitly checks out ("that's it" → `parse_order` sets `place_order`), so
+ordering one item at a time can't produce a string of premature confirmations.
 
 ---
 
@@ -178,7 +183,10 @@ test-first; the commit history follows that order.
 
 1. **Extraction correctness** — right SKUs/quantities/cart-ops (deterministic).
 2. **Clarification behavior** — asked exactly when it should (deterministic; the thesis metric).
-3. **Answer faithfulness** — RAG answers grounded in the catalog (GPT-4o judge; needs `OPENAI_API_KEY`).
+3. **Order submission** — drafts vs. places exactly when the user checks out, never
+   auto-confirming a running draft (deterministic; rows `draft_not_placed`,
+   `place_order_on_checkout`, `place_existing_draft`).
+4. **Answer faithfulness** — RAG answers grounded in the catalog (GPT-4o judge; needs `OPENAI_API_KEY`).
 
 A representative run: **extraction 92%, clarification 83%, answer faithfulness
 100%**. The only failures are the two documented deferred features below

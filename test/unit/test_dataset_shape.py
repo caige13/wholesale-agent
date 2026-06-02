@@ -10,7 +10,7 @@ import pytest
 _DATASET = Path(__file__).resolve().parents[2] / "evals" / "datasets" / "order_desk.jsonl"
 
 REQUIRED_EXPECTED_KEYS = {"skus", "suppliers", "quantities", "expects_clarification"}
-OPTIONAL_EXPECTED_KEYS = {"cart_unchanged", "pii_redacted"}
+OPTIONAL_EXPECTED_KEYS = {"cart_unchanged", "pii_redacted", "submitted"}
 
 
 def _load_rows() -> list[dict]:
