@@ -183,6 +183,13 @@ def _lid_deli():
     )
 
 
+def _deli16():
+    return CatalogItem(
+        sku="DELI-16", product_name="16oz Deli Container", category="containers",
+        unit_size="16oz", case_pack=500, supplier=S, companion_skus=["LID-DELI"],
+    )
+
+
 def _cart_with_pending_lid(quantity=3):
     parent = LineItem(
         sku="DELI-32", product_name="32oz Deli Container", supplier=S, quantity=quantity,
@@ -245,3 +252,25 @@ def test_adding_an_item_without_a_quantity_asks_how_many_and_does_not_draft():
     assert result.clarifications  # asks "how many?"
     assert result.draft_cart.is_empty()  # no quantity-less line landed
     assert result.confirmation is None  # and it did not draft/confirm
+
+
+def test_adding_a_second_deli_size_re_offers_and_tops_up_the_shared_lid():
+    catalog = FakeCatalog(
+        items_by_sku={"DELI-32": _deli32(), "DELI-16": _deli16(), "LID-DELI": _lid_deli()},
+        candidates_by_phrase={"16oz deli": [ResolutionCandidate(item=_deli16(), score=0.95)]},
+    )
+    # Cart already covers 3× 32oz deli (1440 units) with exactly 3 lid cases.
+    cart = Cart(by_supplier={S: [
+        LineItem(sku="DELI-32", product_name="32oz Deli Container", supplier=S, quantity=3),
+        LineItem(sku="LID-DELI", product_name="Deli Container Lid", supplier=S, quantity=3),
+    ]})
+    # Turn 1: add 2× 16oz deli → 2440 units now need 5 lid cases, only 3 present → re-offer.
+    add = ParsedOrder(items=[ParsedItem(phrase="16oz deli", quantity=2)])
+    turn1 = _agent(Intent.ORDER, parsed=add, catalog=catalog).run("add 2 cases of 16oz deli", cart)
+    assert turn1.clarifications  # the shared lid is re-offered for the added size
+    assert next(li for li in turn1.draft_cart.all_lines() if li.sku == "LID-DELI").quantity == 3
+    # Turn 2: "yes" → lid set to cover ALL delis: ceil(2440 / 500) = 5; no further offer.
+    accept = ParsedOrder(accepted_companions=[AcceptedCompanion(name="Deli Container Lid")])
+    turn2 = _agent(Intent.ORDER, parsed=accept, catalog=catalog).run("yes", turn1.draft_cart)
+    assert next(li for li in turn2.draft_cart.all_lines() if li.sku == "LID-DELI").quantity == 5
+    assert turn2.clarifications == []

@@ -81,15 +81,17 @@ graph TD
 the LLM or the trace. Deterministic nodes are pure functions; `intent`,
 `parse_order`, and `rag_qa` are the only LLM calls.
 
-**Companion add-ons (upsell) are data-driven and the loop is the conversation.**
-A catalog item names its pairings via `companion_skus` (e.g. a deli container →
-its lid), so `validate_rules` raises a generic `NEEDS_COMPANION` and the gate asks
-"needs matching X — should I add them?". The reply is parsed as a *closed-set
-selection* (`accepted_companions`), and `add_companions` adds the exact offered
-SKU(s) — sized deterministically by `companion_case_count`, never re-resolved from
-free text. A new item that itself needs a companion just raises its own offer next
-turn, so add → offer → accept → offer-the-next continues across turns until a turn
-needs no question and the gate drafts. Adding a pairing is a catalog edit, not code.
+**Companion add-ons (upsell) are data-driven, coverage-based, and the loop is the
+conversation.** A catalog item names its pairings via `companion_skus` (e.g. a deli
+container → its lid), so `validate_rules` raises a generic `NEEDS_COMPANION` and the
+gate asks "needs matching X — should I add them?". The offer is **coverage-based**:
+a lid (one SKU fits all deli sizes) is pending whenever the cases in the cart don't
+cover the *summed units* of every deli line it pairs with — so adding a second size
+re-offers a top-up. The reply is parsed as a *closed-set selection*
+(`accepted_companions`), and `add_companions` `SET_QUANTITY`s the lid to the exact
+aggregate total (`companion_case_count` over all deli lines), never re-resolved from
+free text. So add → offer → accept → offer-the-next continues across turns until a
+turn needs no question and the gate drafts. Adding a pairing is a catalog edit, not code.
 
 **Draft vs. place order.** A clean turn builds a *running draft* and never auto-submits
 — it asks "anything else, or should I place the order?". `submit_order` fires only when

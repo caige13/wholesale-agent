@@ -49,7 +49,7 @@ def build_graph(
 
     builder.add_node("redact", redact_node)
     builder.add_node("intent", lambda state: intent_node(state, model))
-    builder.add_node("parse", lambda state: parse_node(state, model))
+    builder.add_node("parse", lambda state: parse_node(state, model, catalog))
     builder.add_node("resolve", lambda state: resolve_node(state, catalog, item_memory))
     builder.add_node("add_companions", lambda state: add_companions_node(state, catalog))
     builder.add_node("check_inventory", lambda state: check_inventory_node(state, supplier))

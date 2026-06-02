@@ -52,7 +52,9 @@ def test_intent_node_routes_to_the_classified_intent():
 
 def test_parse_node_emits_an_add_op_with_the_line_item():
     model = FakeStructuredModel(ParsedOrder(items=[ParsedItem(phrase="16oz deli", quantity=3)]))
-    out = parse_node({"clean_message": "3 cases of 16oz deli", "draft_cart": Cart()}, model)
+    out = parse_node(
+        {"clean_message": "3 cases of 16oz deli", "draft_cart": Cart()}, model, FakeCatalog()
+    )
     op = out["cart_ops"][0]
     assert op.op is CartOpKind.ADD
     assert op.item.raw_text == "16oz deli"
@@ -61,7 +63,9 @@ def test_parse_node_emits_an_add_op_with_the_line_item():
 
 def test_parse_node_maps_unit_quantity_for_unit_orders():
     model = FakeStructuredModel(ParsedOrder(items=[ParsedItem(phrase="deli", unit_quantity=1200)]))
-    out = parse_node({"clean_message": "1200 deli containers", "draft_cart": Cart()}, model)
+    out = parse_node(
+        {"clean_message": "1200 deli containers", "draft_cart": Cart()}, model, FakeCatalog()
+    )
     assert out["cart_ops"][0].item.unit_quantity == 1200
 
 
@@ -69,7 +73,9 @@ def test_parse_node_carries_the_classified_op_kind():
     model = FakeStructuredModel(
         ParsedOrder(items=[ParsedItem(phrase="limes", action=CartOpKind.REMOVE)])
     )
-    out = parse_node({"clean_message": "drop the limes", "draft_cart": Cart()}, model)
+    out = parse_node(
+        {"clean_message": "drop the limes", "draft_cart": Cart()}, model, FakeCatalog()
+    )
     assert out["cart_ops"][0].op is CartOpKind.REMOVE
 
 
@@ -80,7 +86,7 @@ def test_parse_node_includes_recent_history_so_follow_ups_have_context():
         "draft_cart": Cart(),
         "history": [{"role": "assistant", "content": "which deli size did you mean?"}],
     }
-    parse_node(state, model)
+    parse_node(state, model, FakeCatalog())
     assert "which deli size did you mean?" in model.prompt
 
 

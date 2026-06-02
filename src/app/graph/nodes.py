@@ -12,7 +12,7 @@ deterministic half of the graph. Defined in the order the graph calls them:
 from __future__ import annotations
 
 from src.domain.cart import Cart
-from src.domain.companions import companion_case_count, pending_offers
+from src.domain.companions import companion_case_count
 from src.domain.models import (
     CartOp,
     CartOpKind,
@@ -50,14 +50,15 @@ def resolve_node(
 
 
 def add_companions_node(state: dict, catalog: CatalogRepository) -> dict:
-    """Add the add-ons the user accepted this turn — by SKU, deterministically.
+    """Apply the add-ons the user accepted this turn — by SKU, deterministically.
 
     The "yes" arrives as ``accepted_companions`` (names picked from the offer). We
-    preview this turn's already-resolved edits onto the cart so a simultaneous
-    quantity change ("yes, and make it 6 cases") sizes the companion correctly and
-    an item added now counts as in the cart, then append one fully-resolved ADD op
-    per accepted offer — the user's quantity if they named one, else
-    ``companion_case_count``. No fuzzy resolution: the SKU is the one we offered.
+    preview this turn's already-resolved edits so coverage reflects them, then for
+    each accepted companion emit a SET_QUANTITY to the total that covers *all* the
+    deli lines it pairs with (so adding a second deli size tops the lid up rather
+    than under-covering) — or the user's amount if they named one. SET_QUANTITY
+    appends when the companion is new and replaces when it's already in the cart.
+    No fuzzy resolution: the SKU is the one we offered.
     """
     ops = list(state.get("cart_ops", []))
     accepted = {
@@ -67,23 +68,63 @@ def add_companions_node(state: dict, catalog: CatalogRepository) -> dict:
         return {"cart_ops": ops}
     effective = (state.get("draft_cart") or Cart()).apply([op for op in ops if op.item.sku])
     extra = []
-    for parent, companion in pending_offers(effective):
-        name = companion.product_name.strip().lower()
-        comp_item = catalog.get(companion.sku)
-        if comp_item is None or name not in accepted:
+    for companion, needed in _undercovered_companions(effective, catalog):
+        if companion.product_name.strip().lower() not in accepted:
             continue
-        stated = accepted[name]
-        quantity = stated if stated is not None else companion_case_count(
-            _parent_units(parent, catalog), comp_item.case_pack
+        comp_item = catalog.get(companion.sku)
+        if comp_item is None:
+            continue
+        stated = accepted[companion.product_name.strip().lower()]
+        quantity = stated if stated is not None else needed
+        extra.append(
+            CartOp(op=CartOpKind.SET_QUANTITY, item=_line_from_catalog(comp_item, quantity))
         )
-        extra.append(CartOp(op=CartOpKind.ADD, item=_line_from_catalog(comp_item, quantity)))
     return {"cart_ops": ops + extra}
 
 
-def _parent_units(line: LineItem, catalog: CatalogRepository) -> int:
-    """The parent line's total unit count (cases × case pack), 0 if unresolved."""
-    item = catalog.get(line.sku) if line.sku else None
-    return (line.quantity or 0) * (item.case_pack if item else 0)
+def _companion_coverage(
+    cart: Cart, catalog: CatalogRepository
+) -> dict[str, tuple[Companion, int, int]]:
+    """Per companion SKU referenced by the cart: (Companion, needed_cases, current_cases).
+
+    ``needed`` covers the summed units of *every* line that pairs with it (a lid fits
+    all deli sizes); ``current`` is that companion's own quantity in the cart.
+    """
+    current: dict[str, int] = {}
+    units: dict[str, int] = {}
+    for line in cart.all_lines():
+        if line.sku:
+            current[line.sku] = current.get(line.sku, 0) + (line.quantity or 0)
+        item = catalog.get(line.sku) if line.sku else None
+        if item is None:
+            continue
+        for companion_sku in item.companion_skus:
+            units[companion_sku] = (
+                units.get(companion_sku, 0) + (line.quantity or 0) * item.case_pack
+            )
+    coverage: dict[str, tuple[Companion, int, int]] = {}
+    for companion_sku, total_units in units.items():
+        comp = catalog.get(companion_sku)
+        if comp is None:
+            continue
+        needed = companion_case_count(total_units, comp.case_pack)
+        name = Companion(sku=comp.sku, product_name=comp.product_name)
+        coverage[companion_sku] = (name, needed, current.get(companion_sku, 0))
+    return coverage
+
+
+def _undercovered_companions(cart: Cart, catalog: CatalogRepository) -> list[tuple[Companion, int]]:
+    """(Companion, needed_cases) for companions the cart doesn't yet cover."""
+    return [
+        (companion, needed)
+        for companion, needed, current in _companion_coverage(cart, catalog).values()
+        if needed > current
+    ]
+
+
+def pending_companions(cart: Cart, catalog: CatalogRepository) -> list[Companion]:
+    """Still-open add-on offers for the parse prompt — companions the cart under-covers."""
+    return [companion for companion, _ in _undercovered_companions(cart, catalog)]
 
 
 def _line_from_catalog(item: CatalogItem, quantity: int | None) -> LineItem:
@@ -123,14 +164,13 @@ def check_inventory_node(state: dict, supplier: SupplierGateway) -> dict:
 
 
 def validate_node(state: dict, catalog: CatalogRepository) -> dict:
-    cart: Cart = state.get("draft_cart") or Cart()
-    # "Already covered" = in the cart OR being added this turn (e.g. a companion
-    # just accepted), so a parent never offers an add-on that's already on its way in.
-    in_cart = {line.sku for line in cart.all_lines()} | {
-        op.item.sku
-        for op in state.get("cart_ops", [])
-        if op.op is CartOpKind.ADD and op.item.sku
-    }
+    base: Cart = state.get("draft_cart") or Cart()
+    # Coverage is a cart-level property, so preview this turn's resolved edits, then
+    # a companion is worth offering only if it still UNDER-covers all the lines it
+    # pairs with — re-adding a parent whose lids are already adequate raises nothing,
+    # while adding a second deli size that outgrows the lids re-offers a top-up.
+    effective = base.apply([op for op in state.get("cart_ops", []) if op.item.sku])
+    undercovered = {companion.sku for companion, _ in _undercovered_companions(effective, catalog)}
     ops = []
     for op in state.get("cart_ops", []):
         catalog_item = catalog.get(op.item.sku) if op.item.sku else None
@@ -141,10 +181,7 @@ def validate_node(state: dict, catalog: CatalogRepository) -> dict:
         item = validate_rules(op.item, catalog_item)
         if Flag.NEEDS_COMPANION in item.flags:
             if op.op is CartOpKind.ADD:
-                # Name the companions to offer (from the catalog), minus any already
-                # in the cart — so re-adding a parent whose lids are present, or a
-                # cart that already has them, raises no offer.
-                item = _attach_companion_offer(item, catalog_item, catalog, in_cart)
+                item = _attach_companion_offer(item, catalog_item, catalog, undercovered)
             else:
                 # The add-on nudge is an add-time suggestion; don't re-ask when only
                 # the quantity of an existing line changes.
@@ -155,13 +192,13 @@ def validate_node(state: dict, catalog: CatalogRepository) -> dict:
     return {"cart_ops": ops}
 
 
-def _attach_companion_offer(item, catalog_item, catalog: CatalogRepository, in_cart) -> LineItem:
-    """Resolve catalog ``companion_skus`` to (sku, name) pairs the offer can name,
-    dropping any already in the cart. If none remain, the nudge is cleared."""
+def _attach_companion_offer(item, catalog_item, catalog, undercovered: set[str]) -> LineItem:
+    """Attach the catalog companions that are still under-covered (named for the
+    offer). If the cart already covers them all, clear the nudge."""
     companions = [
         Companion(sku=sku, product_name=found.product_name)
         for sku in catalog_item.companion_skus
-        if sku not in in_cart and (found := catalog.get(sku)) is not None
+        if sku in undercovered and (found := catalog.get(sku)) is not None
     ]
     if not companions:
         return item.model_copy(update={"flags": _without(item.flags, Flag.NEEDS_COMPANION)})

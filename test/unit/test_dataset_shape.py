@@ -20,7 +20,7 @@ def _load_rows() -> list[dict]:
 
 def test_has_enough_rows():
     rows = _load_rows()
-    assert 10 <= len(rows) <= 20  # spec §9: 10-15 rows (a little headroom)
+    assert 10 <= len(rows) <= 30  # spec §9 baseline (10-15) + accumulated regression rows
 
 
 def test_row_ids_are_unique():

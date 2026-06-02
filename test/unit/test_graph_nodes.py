@@ -6,11 +6,13 @@ for the FAISS retriever); the LLM nodes are contract-tested separately.
 """
 
 from src.app.graph.nodes import (
+    _undercovered_companions,
     add_companions_node,
     apply_node,
     build_clarifications,
     clarify_node,
     draft_node,
+    pending_companions,
     redact_node,
     resolve_node,
     validate_node,
@@ -55,30 +57,33 @@ def test_validate_node_raises_companion_flag_and_names_the_offer(make_catalog_it
     deli = make_catalog_item(sku="DELI-16", companion_skus=["LID-DELI"])
     lid = make_catalog_item(sku="LID-DELI", product_name="Deli Container Lid", category="lids")
     repo = FakeCatalogRepo(items_by_sku={"DELI-16": deli, "LID-DELI": lid})
-    state = {"cart_ops": [_add(LineItem(raw_text="deli", sku="DELI-16", quantity=3))]}
+    state = {"cart_ops": [_add(LineItem(raw_text="deli", sku="DELI-16", supplier=S, quantity=3))]}
     item = validate_node(state, repo)["cart_ops"][0].item
     assert Flag.NEEDS_COMPANION in item.flags
     assert [c.product_name for c in item.companions] == ["Deli Container Lid"]
 
 
-def test_validate_node_makes_no_offer_when_the_companion_is_already_in_the_cart(make_catalog_item):
-    deli = make_catalog_item(sku="DELI-16", companion_skus=["LID-DELI"])
-    lid = make_catalog_item(sku="LID-DELI", product_name="Deli Container Lid", category="lids")
+def test_validate_node_makes_no_offer_when_the_cart_already_covers_the_companion(make_catalog_item):
+    deli = make_catalog_item(sku="DELI-16", case_pack=500, companion_skus=["LID-DELI"])
+    lid = make_catalog_item(
+        sku="LID-DELI", product_name="Deli Container Lid", category="lids", case_pack=500
+    )
     repo = FakeCatalogRepo(items_by_sku={"DELI-16": deli, "LID-DELI": lid})
-    cart = Cart(by_supplier={S: [LineItem(sku="LID-DELI", supplier=S, quantity=1)]})
+    # 3 cases of 16oz deli (1500 units) need 3 lid cases — and 3 are already present.
+    cart = Cart(by_supplier={S: [LineItem(sku="LID-DELI", supplier=S, quantity=3)]})
     state = {
-        "cart_ops": [_add(LineItem(raw_text="deli", sku="DELI-16", quantity=3))],
+        "cart_ops": [_add(LineItem(raw_text="deli", sku="DELI-16", supplier=S, quantity=3))],
         "draft_cart": cart,
     }
     item = validate_node(state, repo)["cart_ops"][0].item
-    assert Flag.NEEDS_COMPANION not in item.flags  # lids already present → no nudge
+    assert Flag.NEEDS_COMPANION not in item.flags  # lids adequately cover → no nudge
 
 
 def test_validate_node_does_not_re_ask_for_a_companion_on_a_quantity_change(make_catalog_item):
     # Bumping the quantity of a container already in the cart shouldn't re-nag.
     deli = make_catalog_item(sku="DELI-16", companion_skus=["LID-DELI"])
     repo = FakeCatalogRepo(items_by_sku={"DELI-16": deli})
-    line = LineItem(raw_text="deli", sku="DELI-16", quantity=3)
+    line = LineItem(raw_text="deli", sku="DELI-16", supplier=S, quantity=3)
     out = validate_node({"cart_ops": [CartOp(op=CartOpKind.SET_QUANTITY, item=line)]}, repo)
     assert Flag.NEEDS_COMPANION not in out["cart_ops"][0].item.flags
 
@@ -265,3 +270,60 @@ def test_add_companions_adds_only_the_accepted_subset(make_catalog_item):
     }
     added = [li.sku for li in _added(state, repo)]
     assert added == ["LID-DELI"]  # the unaccepted Hot Cup Lid is left out
+
+
+# --- companion coverage: which add-ons are still under-covered -----------------
+def _coverage_repo(make_catalog_item):
+    return FakeCatalogRepo(
+        items_by_sku={
+            "DELI-16": make_catalog_item(sku="DELI-16", case_pack=500, companion_skus=["LID-DELI"]),
+            "DELI-32": make_catalog_item(sku="DELI-32", case_pack=480, companion_skus=["LID-DELI"]),
+            "LID-DELI": make_catalog_item(
+                sku="LID-DELI", product_name="Deli Container Lid", category="lids", case_pack=500
+            ),
+            "STRAW-WRAP": make_catalog_item(
+                sku="STRAW-WRAP", product_name="Wrapped Straws", case_pack=10000
+            ),
+        }
+    )
+
+
+def test_offers_a_companion_when_its_line_has_no_lid_in_the_cart(make_catalog_item):
+    cart = Cart(by_supplier={S: [LineItem(sku="DELI-16", supplier=S, quantity=3)]})
+    pending = pending_companions(cart, _coverage_repo(make_catalog_item))
+    assert [c.sku for c in pending] == ["LID-DELI"]
+
+
+def test_does_not_offer_a_companion_the_cart_already_covers(make_catalog_item):
+    # 3 cases of 16oz deli (1500 units) need 3 lid cases; 3 are present → covered.
+    cart = Cart(by_supplier={S: [
+        LineItem(sku="DELI-16", supplier=S, quantity=3),
+        LineItem(sku="LID-DELI", supplier=S, quantity=3),
+    ]})
+    assert pending_companions(cart, _coverage_repo(make_catalog_item)) == []
+
+
+def test_re_offers_when_a_present_lid_under_covers_an_added_size(make_catalog_item):
+    # 3x 32oz (1440) + 2x 16oz (1000) = 2440 units need 5 lid cases; only 3 present.
+    cart = Cart(by_supplier={S: [
+        LineItem(sku="DELI-32", supplier=S, quantity=3),
+        LineItem(sku="DELI-16", supplier=S, quantity=2),
+        LineItem(sku="LID-DELI", supplier=S, quantity=3),
+    ]})
+    undercovered = _undercovered_companions(cart, _coverage_repo(make_catalog_item))
+    assert [(c.sku, needed) for c, needed in undercovered] == [("LID-DELI", 5)]
+
+
+def test_aggregates_a_shared_lid_across_two_deli_sizes(make_catalog_item):
+    # No lid yet; the shared lid is offered once, sized to cover both deli lines.
+    cart = Cart(by_supplier={S: [
+        LineItem(sku="DELI-32", supplier=S, quantity=3),
+        LineItem(sku="DELI-16", supplier=S, quantity=2),
+    ]})
+    undercovered = _undercovered_companions(cart, _coverage_repo(make_catalog_item))
+    assert [(c.sku, needed) for c, needed in undercovered] == [("LID-DELI", 5)]
+
+
+def test_no_companion_offer_for_a_line_without_companions(make_catalog_item):
+    cart = Cart(by_supplier={S: [LineItem(sku="STRAW-WRAP", supplier=S, quantity=2)]})
+    assert pending_companions(cart, _coverage_repo(make_catalog_item)) == []

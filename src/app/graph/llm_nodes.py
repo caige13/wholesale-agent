@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from src.app.graph.nodes import pending_companions
 from src.domain.cart import Cart
-from src.domain.companions import pending_companions
 from src.domain.models import (
     CartOp,
     CartOpKind,
@@ -76,12 +76,15 @@ _INTENT_INSTRUCTIONS = (
     "Message:\n"
 )
 _PARSE_INSTRUCTIONS = (
-    "Extract the changes the restaurant wants to make to its order. For each item "
-    "give the product phrase, correcting obvious spelling/spacing typos to the "
-    "catalog's standard wording (e.g. '16 ounze deli ocntainers' → '16oz deli "
-    "container') — but do NOT add detail the user didn't give (if they didn't state "
-    "a size, don't invent one). Also give either the number of cases (quantity) or "
-    "a raw unit count (unit_quantity) if ordered in units.\n"
+    "Extract the changes the restaurant wants to make to its order. Include EVERY "
+    "item the user asks for, even one you don't recognize as a catalog product — "
+    "give its phrase as stated; never silently drop a requested item (the system "
+    "will ask about anything it can't match). For each item give the product phrase, "
+    "correcting obvious spelling/spacing typos to the catalog's standard wording "
+    "(e.g. '16 ounze deli ocntainers' → '16oz deli container') — but do NOT add "
+    "detail the user didn't give (if they didn't state a size, don't invent one). "
+    "Also give either the number of cases (quantity) or a raw unit count "
+    "(unit_quantity) if ordered in units.\n"
     "Choose an action per item:\n"
     "- 'add' for a new item or more of something.\n"
     "- 'set_quantity' when the item is ALREADY in the current cart and the user "
@@ -118,8 +121,8 @@ def intent_node(state: dict, model: BaseChatModel) -> dict:
     return {"intent": result.intent}
 
 
-def parse_node(state: dict, model: BaseChatModel) -> dict:
-    pending = pending_companions(state.get("draft_cart") or Cart())
+def parse_node(state: dict, model: BaseChatModel, catalog: CatalogRepository) -> dict:
+    pending = pending_companions(state.get("draft_cart") or Cart(), catalog)
     prompt = _format_history(state.get("history")) + _PARSE_INSTRUCTIONS.format(
         cart=_cart_context(state.get("draft_cart")),
         offer=_offer_context(pending),
