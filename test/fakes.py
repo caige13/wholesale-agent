@@ -84,7 +84,8 @@ class FakeOrderAgent:
     def last_history(self):
         return self.calls[-1][2] if self.calls else None
 
-    def run(self, message: str, cart: Cart, history=None) -> AgentResult:
+    def run(self, message: str, cart: Cart, history=None, *, trace=None) -> AgentResult:
+        # trace is observability-only; the stub ignores it (records just the inputs).
         self.calls.append((message, cart, history))
         return self._result
 

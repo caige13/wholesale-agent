@@ -1,20 +1,20 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guidance for working in this repository.
 
 ## Git commits
 
-Do **not** attribute commits to Claude. Commit messages must not include a
-`Co-Authored-By: Claude ...` trailer, "Generated with Claude Code" lines, or any
-other reference mapping the commit back to Claude. Write the message as the
+Do **not** attribute commits to Codex. Commit messages must not include a
+`Co-Authored-By: Codex ...` trailer, "Generated with Codex" lines, or any
+other reference mapping the commit back to Codex. Write the message as the
 human author's own.
 
 ## GitHub
 
-Do **not** attribute pull requests (or any GitHub content) to Claude. PR titles,
-descriptions, and comments must not include "Generated with Claude Code",
-a Claude co-author trailer, or any other reference mapping the work back to
-Claude. Write them as the human author's own.
+Do **not** attribute pull requests (or any GitHub content) to Codex. PR titles,
+descriptions, and comments must not include "Generated with Codex",
+a Codex co-author trailer, or any other reference mapping the work back to
+Codex. Write them as the human author's own.
 
 ## Testing
 

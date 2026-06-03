@@ -9,11 +9,16 @@ turn never blanks the cart panel.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
 
 from src.domain.cart import Cart
 from src.domain.models import LineItem
 from src.ports.order_agent import AgentResult, OrderAgent
+
+if TYPE_CHECKING:
+    from src.observability import TraceContext
 
 
 class TurnResult(BaseModel):
@@ -24,16 +29,22 @@ class TurnResult(BaseModel):
 
 
 def handle_turn(
-    message: str, cart: Cart, agent: OrderAgent, history: list[dict] | None = None
+    message: str,
+    cart: Cart,
+    agent: OrderAgent,
+    history: list[dict] | None = None,
+    *,
+    trace: TraceContext | None = None,
 ) -> TurnResult:
     """Run one turn through the agent and shape it for the UI.
 
-    ``history`` (recent {role, content} turns) is passed through so the agent can
-    resolve follow-ups against the prior exchange.
+    Two independent pass-throughs: ``history`` (recent {role, content} turns) is a
+    *behavioral* input — it feeds the prompt so the agent can resolve follow-ups;
+    ``trace`` is *observability* metadata the agent attaches to the LangSmith run and
+    that never changes the result. They're orthogonal, so neither branches on the
+    other — both are forwarded as-is.
     """
-    # Pass history only when present, so an agent whose run() predates the
-    # history parameter keeps working — the UI adopts history at its own pace.
-    result = agent.run(message, cart, history) if history else agent.run(message, cart)
+    result = agent.run(message, cart, history, trace=trace)
     return TurnResult(reply=_compose_reply(result), cart=result.draft_cart)
 
 

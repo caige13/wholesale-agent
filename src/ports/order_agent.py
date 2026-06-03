@@ -8,12 +8,15 @@ the handler can be built and tested against a stub today.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
 from src.domain.cart import Cart
 from src.domain.models import OrderConfirmation
+
+if TYPE_CHECKING:
+    from src.observability import TraceContext
 
 
 class AgentResult(BaseModel):
@@ -33,10 +36,19 @@ class AgentResult(BaseModel):
 
 @runtime_checkable
 class OrderAgent(Protocol):
-    def run(self, message: str, cart: Cart, history: list[dict] | None = None) -> AgentResult:
+    def run(
+        self,
+        message: str,
+        cart: Cart,
+        history: list[dict] | None = None,
+        *,
+        trace: TraceContext | None = None,
+    ) -> AgentResult:
         """Process one turn against the running cart, returning its result.
 
         ``history`` is the recent conversation ({role, content}); it lets the
         agent interpret follow-ups in context (e.g. answering a clarification).
+        ``trace`` is an optional observability context the boundary attaches to the
+        run for LangSmith; concrete agents may ignore it.
         """
         ...

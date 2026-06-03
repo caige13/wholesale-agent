@@ -17,13 +17,18 @@ ink-stamp accent. The cart renders as a printed slip grouped by supplier.
 from __future__ import annotations
 
 import html
+import logging
 import time
+from typing import TYPE_CHECKING
 
 from src.app.turn import handle_turn
 from src.domain.cart import Cart
 from src.domain.models import CartOp, CartOpKind, Flag, LineItem
 from src.domain.policies import BLOCKING_FLAGS
 from src.ports.order_agent import OrderAgent
+
+if TYPE_CHECKING:
+    from src.observability import TraceContext
 
 _EXAMPLES = [
     "3 cases of 16oz deli containers and some salsa cups",
@@ -57,21 +62,31 @@ def run_turn(
     message: str,
     history: list[dict],
     cart: Cart,
+    *,
+    trace: TraceContext | None = None,
 ) -> tuple[list[dict], Cart]:
     """Run one turn and fold it into the chat history.
 
     Returns the message list (messages format) with this turn appended and the
     cart the agent handed back — always ``result.cart``, so a question turn keeps
     the panel intact (spec §11). The prior ``history`` is forwarded so the agent
-    can resolve follow-ups against the conversation so far.
+    can resolve follow-ups against the conversation so far; ``trace`` (if any) labels
+    the LangSmith run.
     """
-    result = handle_turn(message, cart, agent, history)
+    result = handle_turn(message, cart, agent, history, trace=trace)
     new_history = [
         *history,
         {"role": "user", "content": message},
         {"role": "assistant", "content": result.reply},
     ]
     return new_history, result.cart
+
+
+def _ui_trace(history_len: int) -> TraceContext:
+    """A ``ui``-surface TraceContext for one turn (import kept lazy/keyless-safe)."""
+    from src.observability import TraceContext
+
+    return TraceContext(surface="ui", metadata={"history_len": history_len})
 
 
 # --- direct cart edits from the panel (remove / change quantity) ----------
@@ -576,11 +591,14 @@ def _theme(gr):
     )
 
 
-def build_app(agent: OrderAgent):
+def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
     """Build the Gradio Blocks app over ``agent``. Gradio imported lazily.
 
     Theme + css are applied at ``launch`` time (Gradio 6 moved them off the
     ``Blocks`` constructor), so the Blocks here is structural only.
+
+    ``trace_enabled`` (set by ``launch`` from settings) decides whether each turn
+    carries a ``ui`` ``TraceContext`` for LangSmith; tests build the app without it.
     """
     import gradio as gr
 
@@ -605,7 +623,8 @@ def build_app(agent: OrderAgent):
             "",
         )
 
-        history, new_cart = run_turn(agent, message, prior, cart)
+        trace = _ui_trace(len(prior)) if trace_enabled else None
+        history, new_cart = run_turn(agent, message, prior, cart, trace=trace)
         full_reply = history[-1]["content"]
         words = full_reply.split(" ")
         history[-1]["content"] = ""
@@ -706,10 +725,17 @@ def launch(**kwargs):
     import gradio as gr
 
     from src.bootstrap import build_agent
+    from src.config import get_settings
+    from src.observability import configure_logging, configure_tracing, tracing_status_line
+
+    configure_logging()
+    settings = get_settings()
+    tracing = configure_tracing(settings)
+    logging.getLogger(__name__).info(tracing_status_line(settings, tracing))
 
     kwargs.setdefault("theme", _theme(gr))
     kwargs.setdefault("css", _CSS)
-    build_app(build_agent()).launch(**kwargs)
+    build_app(build_agent(), trace_enabled=tracing).launch(**kwargs)
 
 
 if __name__ == "__main__":

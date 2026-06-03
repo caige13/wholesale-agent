@@ -1,7 +1,7 @@
 # AI Order Desk — dev tasks. Thin wrappers over uv so the commands are
 # discoverable and CI/README can reference one canonical entrypoint.
 
-.PHONY: setup setup-agent test lint eval ui
+.PHONY: setup setup-agent test lint eval eval-langsmith ui
 
 # Core dev env: domain + deterministic core + test tooling. Fast, no API key.
 setup:
@@ -22,6 +22,12 @@ lint:
 ui:
 	uv run python -m src.interfaces.gradio_app
 
-# LangSmith eval harness — deferred to the eval slice.
+# Local eval runner — scores the dataset and prints the metrics. Needs
+# GOOGLE_API_KEY (agent) and OPENAI_API_KEY (the cross-model faithfulness judge).
 eval:
-	@echo "eval harness deferred — see docs/spec.md §9 and evals/datasets/order_desk.jsonl"
+	uv run python -m evals.run_eval
+
+# LangSmith-native eval — upserts the dataset and runs a versioned experiment in
+# the UI over the same metrics. Also needs LANGSMITH_API_KEY + LANGSMITH_TRACING=true.
+eval-langsmith:
+	uv run python -m evals.langsmith_eval
