@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage
+
 from src.app.graph.llm_nodes import IntentResult, ParsedOrder
 from src.domain.cart import Cart
 from src.domain.models import CatalogItem, InventoryStatus, OrderConfirmation
@@ -19,19 +21,48 @@ SUPPLIER = "acme-foodservice"
 
 
 class ScriptedModel:
-    """Fake chat model: canned intent + parse results, and a canned QA answer."""
+    """Fake chat model for the order graph — keyless, no real LLM.
 
-    def __init__(self, intent, parsed=None, answer=""):
+    Covers the three ways the graph calls a model:
+    - ``with_structured_output`` for intent classification + order parsing (canned).
+    - ``bind_tools`` for the QA subgraph's assistant<->tools loop. With ``tool_steps``
+      left ``None`` the bound model answers immediately (no tool calls, content =
+      ``answer``); pass ``tool_steps`` to script a sequence — a list of
+      ``{"name", "args"}`` dicts becomes an ``AIMessage`` with those ``tool_calls``,
+      a plain string becomes the final answer ``AIMessage``.
+    """
+
+    def __init__(self, intent, parsed=None, answer="", tool_steps=None):
         self._intent = intent
         self._parsed = parsed or ParsedOrder()
         self._answer = answer
+        self._tool_steps = tool_steps
 
     def with_structured_output(self, schema):
         result = IntentResult(intent=self._intent) if schema is IntentResult else self._parsed
         return SimpleNamespace(invoke=lambda _prompt: result)
 
-    def invoke(self, _prompt):
-        return SimpleNamespace(content=self._answer)
+    def bind_tools(self, _tools):
+        steps = list(self._tool_steps) if self._tool_steps is not None else None
+
+        def _invoke(_messages):
+            if steps is None:  # no script: the model just answers
+                return AIMessage(content=self._answer)
+            step = steps.pop(0)
+            if isinstance(step, str):  # a string step is the final answer
+                return AIMessage(content=step)
+            tool_calls = [  # a list step is one round of tool calls
+                {
+                    "name": c["name"],
+                    "args": c.get("args", {}),
+                    "id": c.get("id", f"call_{i}"),
+                    "type": "tool_call",
+                }
+                for i, c in enumerate(step)
+            ]
+            return AIMessage(content="", tool_calls=tool_calls)
+
+        return SimpleNamespace(invoke=_invoke)
 
 
 class FakeCatalog:

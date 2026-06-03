@@ -30,9 +30,9 @@ from test.fakes import catalog_item as _item  # noqa: E402
 S = "acme-foodservice"
 
 
-def _agent(intent, parsed=None, answer="", catalog=None, supplier=None):
+def _agent(intent, parsed=None, answer="", catalog=None, supplier=None, tool_steps=None):
     graph = build_graph(
-        ScriptedModel(intent, parsed, answer),
+        ScriptedModel(intent, parsed, answer, tool_steps),
         catalog or FakeCatalog(),
         supplier or FakeSupplier(),
     )
@@ -166,6 +166,27 @@ def test_question_returns_answer_and_leaves_the_cart_unchanged():
     result = agent.run("how many per case?", cart)
     assert result.answer == "Each case has 500 units."
     assert result.draft_cart == cart
+
+
+def test_question_path_runs_a_tool_call_loop_then_answers():
+    # The QUESTION branch is a real tool-calling subgraph: the model calls search_catalog,
+    # the ToolNode runs it, then the model answers — all read-only, cart untouched.
+    deli = _item("DELI-16", "16oz Deli Container")
+    catalog = FakeCatalog(
+        candidates_by_phrase={"16oz deli": [ResolutionCandidate(item=deli, score=0.95)]}
+    )
+    agent = _agent(
+        Intent.QUESTION,
+        catalog=catalog,
+        tool_steps=[
+            [{"name": "search_catalog", "args": {"query": "16oz deli"}}],
+            "The 16oz deli container comes 500 per case.",
+        ],
+    )
+    cart = Cart(by_supplier={S: [LineItem(sku="DELI-16", product_name="16oz Deli", quantity=2)]})
+    result = agent.run("how many 16oz deli per case?", cart)
+    assert result.answer == "The 16oz deli container comes 500 per case."
+    assert result.draft_cart == cart  # question path leaves the cart intact
 
 
 # --- companion add-on flow: accept a pending offer, add it by SKU --------------

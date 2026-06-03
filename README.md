@@ -62,7 +62,7 @@ to stay under quota; raise it on a paid tier for a snappier UI.
 graph TD
     START([User message]) --> redact[redact_normalize<br/>strip PII · normalize units]
     redact --> intent{intent}
-    intent -->|question| ragqa[rag_qa<br/>answer from catalog]
+    intent -->|question| ragqa[rag_qa subgraph<br/>model ⇄ tools: search_catalog · check_inventory · get_price]
     intent -->|order / reorder / yes-to-offer| parse[parse_order<br/>cart_ops + accepted_companions]
     parse --> resolve[resolve_skus<br/>retriever candidates -> SKU + confidence]
     resolve --> companions[add_companions<br/>accepted offer -> ADD by SKU · qty = companion_case_count]
@@ -79,7 +79,12 @@ graph TD
 
 `redact_normalize` runs first, as a front-door guardrail, so PII never reaches
 the LLM or the trace. Deterministic nodes are pure functions; `intent`,
-`parse_order`, and `rag_qa` are the only LLM calls.
+`parse_order`, and the `rag_qa` subgraph are the only LLM calls. `rag_qa` is a real
+**tool-calling loop** (`bind_tools` → `ToolNode` → `ToolMessage`): the model decides
+which read-only tool to call — `search_catalog` over the FAISS catalog,
+`check_inventory` / `get_price` over the supplier — and loops until it answers. It's
+compiled as its own subgraph and embedded as a single node, so the root graph stays a
+linear pipeline (and `parent.stream(subgraphs=True)` can stream the answer tokens).
 
 **Companion add-ons (upsell) are data-driven, coverage-based, and the loop is the
 conversation.** A catalog item names its pairings via `companion_skus` (e.g. a deli
@@ -112,7 +117,8 @@ src/
   adapters/      Concrete implementations — JsonCatalogRepository, FaissCatalogRepository.
   app/
     turn.py      handle_turn — the UX boundary the UI delegates to.
-    graph/       OrderState, the deterministic + LLM nodes, the gate, and build_graph.
+    graph/       OrderState, the deterministic + LLM nodes, the gate, build_graph,
+                 and subgraphs/ (the QA tool-calling agent + its read-only tools).
   interfaces/    Gradio UI (a thin mirror of graph state).
   bootstrap.py   Composition root — the only place that wires concrete adapters + models.
 evals/           Dataset, deterministic judges + the GPT-4o answer judge, run_eval.
@@ -132,6 +138,15 @@ every concrete adapter.
   `with_structured_output` / `bind_tools` and break tracing. Custom ports exist
   *only* where LangChain has no concept — the catalog repository and the inner
   agent.
+
+- **Tools are model-driven only where it's safe: the read-only question path.** The
+  catalog/supplier lookups are real LangChain `StructuredTool`s, and the QUESTION branch
+  is a genuine tool-calling agent (`bind_tools` + `ToolNode`), not a single canned RAG
+  call. The **order-write** path is deliberately *not* tool-driven: SKU resolution, the
+  clarify/draft gate, and `submit_order` stay deterministic typed calls, so the model can
+  answer questions but can never silently place or mutate an order. The tools and the
+  deterministic nodes share the same adapters underneath — a tool is just the model-facing
+  face of a port.
 
 - **Catalog (RAG) vs. supplier API — static vs. dynamic.** The catalog is the
   semantic knowledge base (names, aliases, case packs, companions) and lives in the
