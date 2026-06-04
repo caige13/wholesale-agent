@@ -10,10 +10,11 @@ never writes ``draft_cart``) hands the same cart back unchanged.
 ``graph.stream`` and yields progress + token events for the UI, then the final result.
 
 State threading: ``run``/``stream_run`` seed ``draft_cart`` only when a cart is passed,
-so when the graph was compiled with a checkpointer the persisted state (keyed by
-``thread_id``) supplies the cart instead — the foundation for durable, resumable
-conversations. The ``thread_id`` is always sent in the invoke config; a checkpointer-less
-graph simply ignores it.
+so when the graph was compiled with a checkpointer (production always is) the persisted
+state (keyed by ``thread_id``) supplies the cart instead, and the checkpointer-owned
+history carries across turns — the agent records each turn via ``record_turn``. The
+``thread_id`` is always sent in the invoke config; a checkpointer-less graph (the keyless
+tests) simply ignores it and runs single-turn.
 
 Observability lives only here, at the boundary — never in the (pure) nodes. When a
 ``TraceContext`` is supplied we label the run (name + tags + metadata) via the invoke

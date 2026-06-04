@@ -30,6 +30,15 @@ from .render import (
 from .seam import _EXAMPLES, _initial_history, _new_thread, _ui_trace
 
 
+def _line_handlers(supplier: str, sku: str):
+    """The −/＋/✕ click handlers for one cart line, each capturing its supplier + sku."""
+    return (
+        lambda cart: step_line_quantity(cart, supplier, sku, -1),
+        lambda cart: step_line_quantity(cart, supplier, sku, +1),
+        lambda cart: remove_line(cart, supplier, sku),
+    )
+
+
 def _theme(gr):
     """The paper-stock theme — Hanken Grotesk body over a JetBrains Mono base."""
     return gr.themes.Base(
@@ -120,13 +129,10 @@ def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
                     rm = gr.Button("✕", elem_classes="rmbtn", scale=0,
                                    min_width=30, interactive=editable)
                 if editable:
-                    s, k = item.supplier, item.sku
-                    dec.click(lambda c, s=s, k=k: step_line_quantity(c, s, k, -1),
-                              cart_state, cart_state)
-                    inc.click(lambda c, s=s, k=k: step_line_quantity(c, s, k, +1),
-                              cart_state, cart_state)
-                    rm.click(lambda c, s=s, k=k: remove_line(c, s, k),
-                             cart_state, cart_state)
+                    decrement, increment, remove = _line_handlers(item.supplier, item.sku)
+                    dec.click(decrement, cart_state, cart_state)
+                    inc.click(increment, cart_state, cart_state)
+                    rm.click(remove, cart_state, cart_state)
         gr.HTML(_footer_html(cart))
 
     with gr.Blocks(title="The Order Desk", fill_height=True) as demo:

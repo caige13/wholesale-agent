@@ -1,12 +1,18 @@
-"""Deterministic graph nodes — thin wrappers over the pure domain functions.
+r"""Deterministic graph nodes — thin wrappers over the pure domain functions.
 
 Each node takes the current OrderState and returns a partial update LangGraph
 merges in. Dependencies (the catalog retriever) are passed in; ``build_graph``
 binds them into single-arg node closures. No LLM here — these are the keyless,
-deterministic half of the graph. Defined in the order the graph calls them:
+deterministic half of the graph. Defined in the order the graph calls them.
+After ``intent`` (in llm_nodes) the graph branches three ways: the question
+branch runs the rag_qa subgraph, the escalate branch opens a handoff, and the
+order/reorder branch runs the parse-through-apply pipeline below:
 
-    redact -> (parse/intent: llm_nodes) -> resolve -> check_inventory
-           -> validate -> apply -> gate -> draft | clarify
+    redact -> intent --(question)--> rag_qa
+                     |--(escalate)--> escalate
+                     \--(order)----> (parse: llm_nodes) -> resolve
+                                  -> check_inventory -> validate -> apply
+                                  -> gate -> draft | clarify
 """
 
 from __future__ import annotations
@@ -206,7 +212,7 @@ def _attach_companion_offer(item, catalog_item, catalog, undercovered: set[str])
 
 
 def _without(flags: list[Flag], flag: Flag) -> list[Flag]:
-    return [f for f in flags if f != flag]
+    return [current_flag for current_flag in flags if current_flag != flag]
 
 
 def apply_node(state: dict) -> dict:

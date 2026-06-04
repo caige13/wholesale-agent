@@ -89,6 +89,7 @@ graph TD
     START([User message]) --> redact[redact_normalize<br/>strip PII · normalize units]
     redact --> intent{intent}
     intent -->|question| ragqa[rag_qa subgraph<br/>model ⇄ tools: search_catalog · check_inventory · get_price]
+    intent -->|escalate| escalate[escalate<br/>open handoff ticket]
     intent -->|order / reorder / yes-to-offer| parse[parse_order<br/>cart_ops + accepted_companions]
     parse --> resolve[resolve_skus<br/>retriever candidates -> SKU + confidence]
     resolve --> companions[add_companions<br/>accepted offer -> ADD by SKU · qty = companion_case_count]
@@ -99,6 +100,7 @@ graph TD
     gate -->|low confidence or blocking flag| clarify[ask_clarifying]
     gate -->|clean| draft[draft<br/>submit only on checkout]
     ragqa --> done([Final response])
+    escalate --> done
     clarify --> done
     draft --> done
 ```
@@ -139,13 +141,16 @@ src/
                  (redaction, rules, cart aggregate, SKU resolution, policies).
                  Zero LLM/LangChain imports.
   ports/         Protocols for the external systems with no LangChain equivalent:
-                 CatalogRepository (RAG seam), OrderAgent (inner-agent contract).
-  adapters/      Concrete implementations — JsonCatalogRepository, FaissCatalogRepository.
+                 CatalogRepository (RAG seam), OrderAgent (inner-agent contract),
+                 SupplierGateway (price/stock), EscalationGateway (human handoff).
+  adapters/      Concrete implementations — JsonCatalogRepository, FaissCatalogRepository,
+                 MockSupplierGateway, MockEscalationGateway.
   app/
-    turn.py      handle_turn — the UX boundary the UI delegates to.
+    turn.py      handle_turn (and stream_turn for streaming) — the UX boundary the UI delegates to.
     graph/       OrderState, the deterministic + LLM nodes, the gate, build_graph,
                  and subgraphs/ (the QA tool-calling agent + its read-only tools).
-  interfaces/    Gradio UI (a thin mirror of graph state).
+  interfaces/    gradio_app/ package — the Gradio UI (a thin mirror of graph state),
+                 split into app.py / seam.py / render.py / cart_ops.py / assets.py.
   bootstrap.py   Composition root — the only place that wires concrete adapters + models.
 evals/           Dataset, deterministic judges + the GPT-4o answer judge, run_eval.
 ```
@@ -193,9 +198,10 @@ every concrete adapter.
 - **PII: secure field for *needed* data, redaction for *accidental* leakage.**
   Nothing about placing an order needs a phone/email, so when one shows up in chat
   it's accidental — `redact_normalize` strips it at the front door before the LLM
-  or trace sees it (recording only the *type*, never the value). If we ever need
-  delivery contact, it belongs in a structured UI field that bypasses the prompt
-  entirely — not in the chat.
+  or trace sees it (recording only the *type*, never the value). The persisted
+  conversation history is redacted at record time too, so PII never reaches the LLM
+  *or* the checkpointer. If we ever need delivery contact, it belongs in a structured
+  UI field that bypasses the prompt entirely — not in the chat.
 
 - **Cross-model eval judge.** The deterministic metrics are graded with `==`; the
   open-ended RAG answer is graded by **GPT-4o judging the Gemini agent**, so the
@@ -213,9 +219,9 @@ probabilistic behavior is measured by the eval, never asserted in a unit test.
 | **Unit** | pure functions (`redact_normalize`, `validate_rules`, `Cart`, `gate`, `resolve_skus`, judges) | exact assertions, keyless |
 | **Contract** | LLM nodes (`intent`, `parse_order`, `rag_qa`) | fake model — assert **state shape & routing**, not exact text |
 | **Integration** | graph wiring + FAISS retriever | fake LLM / real embeddings — clean→drafted, ambiguous→clarify, question→answer + cart unchanged |
-| **Eval** | end-to-end quality | LangSmith dataset + the two metrics (marked `@pytest.mark.eval`, skipped by default) |
+| **Eval** | end-to-end quality | LangSmith dataset + the five metrics (marked `@pytest.mark.eval`, skipped by default) |
 
-`make test` runs the first three (246 tests, fast, keyless). The code was built
+`make test` runs the first three (~245 tests, fast, keyless). The code was built
 test-first; the commit history follows that order.
 
 ---
@@ -228,13 +234,19 @@ test-first; the commit history follows that order.
 2. **Clarification behavior** — asked exactly when it should (deterministic; the thesis metric).
 3. **Order submission** — drafts vs. places exactly when the user checks out, never
    auto-confirming a running draft (deterministic; rows `draft_not_placed`,
-   `place_order_on_checkout`, `place_existing_draft`).
-4. **Answer faithfulness** — RAG answers grounded in the catalog (GPT-4o judge; needs `OPENAI_API_KEY`).
+   `place_order_on_checkout`, `place_existing_draft`, `affirm_place_order`).
+4. **Escalation behavior** — hands off to a human exactly on the escalation rows,
+   never on a normal order/question (deterministic; rows `escalate_explicit_human`,
+   `escalate_out_of_scope`).
+5. **Answer faithfulness** — RAG answers grounded in the catalog (GPT-4o judge; needs `OPENAI_API_KEY`).
 
-A representative run: **extraction 92%, clarification 83%, answer faithfulness
-100%**. The only failures are the two documented deferred features below
-(`out_of_stock`, `reorder_usual`) — the eval surfacing them is the point, not a
-number to game; the dataset's expectations are never relaxed to pass.
+A representative run scores **100% across all five metrics** (extraction,
+clarification, order submission, escalation, answer faithfulness) over the 26-row
+dataset. The numbers are model-dependent, and the dataset's expectations are never
+relaxed to pass — a regression surfaces as a dropped metric, not a silently edited
+row. The deferred features below (`reorder_usual`, richer `out_of_stock` handling)
+still score `ok` because their rows expect the *clarification fallback* that's the
+correct behavior until the feature lands — the eval pins that contract too.
 
 `make eval` runs that local, keyless-friendly runner. `make eval-langsmith`
 (`uv run python -m evals.langsmith_eval`) is its in-platform sibling: it **syncs** the
@@ -246,18 +258,25 @@ drifting. Needs `LANGSMITH_API_KEY`.
 
 ---
 
-## What I'd improve with more time
+## Areas for Improvement / Future Iteration
 
-- **Inventory / out-of-stock** — wire a mocked `SupplierGateway` (price + stock)
-  so the `out_of_stock` flag and lead-time messaging fire. (The flag and gate
-  handling already exist; only the data source is stubbed out.)
+- **Inventory / out-of-stock** — the `SupplierGateway` port and `MockSupplierGateway`
+  (price + stock) are wired, and the `out_of_stock` flag and gate handling already
+  exist; what's left is richer stock data + lead-time messaging behind that same seam.
 - **Reorder / item-memory** — populate per-restaurant memory so "the usual"
   resolves.
 - **`interrupt()`/resume** — conversation state now lives in a LangGraph
   **checkpointer** (the agent records each turn, keyed by thread id; the UI no longer
-  threads history), and the cart is the UI's directly-editable document. The remaining
+  threads history), the cart is the UI's directly-editable document, and answers
+  **stream** token-by-token (`agent.stream_run` → `stream_turn`). The remaining
   production step is `interrupt()`/resume for a mid-turn approval gate (e.g. confirming
   a high-value order) — a better fit than re-running clarification turns.
+- **PII never reaches the trace** — the redact guardrail already produces a scrubbed
+  `clean_message` and records `pii_found` as **types only**, but a turn's run *inputs*
+  still carry the original `raw_message`. For a production service no PII would be
+  visible in LangSmith at all: the trace boundary would mask any PII to a type
+  descriptor (`[SSN]`, `[Phone number]`) on the way out, so a reviewer sees the *shape*
+  of what was redacted and LangSmith never receives the raw value.
 - **`set_quantity` robustness** — "make it 3" now classifies correctly, but it's
   LLM-dependent; a few-shot example in the parse prompt would harden it against
   regressions (the eval is what would catch one).
@@ -277,9 +296,16 @@ traces to `LANGSMITH_PROJECT`.
 Each run is **labeled at creation** from the one boundary (`LangGraphOrderAgent.run`),
 so the nodes stay pure and there's no extra round-trip:
 
-- **run name** `order_desk_{surface}` and tag `surface:{ui|eval|smoke}`, set via the
-  invoke `RunnableConfig` — conflict-free because it's part of the run's create payload;
-- the **eval-row id** on eval runs (find any dataset row in the UI) as run metadata.
+- **run name** — `order_desk_{surface}`, so the run list reads as *where the turn came
+  from* at a glance (`ui` / `eval` / `smoke`).
+- **tags** — `["order-desk", "surface:{surface}"]`: `order-desk` scopes the project to
+  this app; `surface:{ui|eval|smoke}` filters the run list to one entry point.
+- **metadata** — `surface` always, plus a surface-specific slice: `eval_row_id` on eval
+  runs (jump straight to the matching dataset row in the UI), `history_len` on UI turns.
+
+The schema lives once in `TraceContext.to_runnable_config()` and rides the invoke
+`RunnableConfig` — conflict-free because it's part of the run's create payload, not a
+post-hoc patch.
 
 The turn's **outcome** (`intent`, `status`, `clarifications`, `confirmation`) isn't
 re-attached as metadata — it's already the run's **outputs** (they're keys in the graph's

@@ -3,7 +3,7 @@
 Keeping all cart behavior here (never in the LLM, never in UI callbacks) is what
 keeps the UI a swappable thin mirror. ``apply`` is pure: it returns a NEW Cart
 and never mutates the receiver, so the previous turn's state stays intact for the
-UI / a future checkpointer.
+UI / the checkpointer.
 """
 
 from __future__ import annotations
@@ -39,21 +39,21 @@ class Cart(BaseModel):
 def _apply_one(by_supplier: dict[str, list[LineItem]], op: CartOp) -> None:
     item = op.item
     items = by_supplier.setdefault(item.supplier, [])
-    idx = next((i for i, li in enumerate(items) if li.sku == item.sku), None)
+    match_index = next((i for i, li in enumerate(items) if li.sku == item.sku), None)
 
     if op.op is CartOpKind.ADD:
-        if idx is None:
+        if match_index is None:
             items.append(item)
         else:
-            merged = (items[idx].quantity or 0) + (item.quantity or 0)
-            items[idx] = items[idx].model_copy(update={"quantity": merged})
+            merged = (items[match_index].quantity or 0) + (item.quantity or 0)
+            items[match_index] = items[match_index].model_copy(update={"quantity": merged})
     elif op.op is CartOpKind.SET_QUANTITY:
         if item.quantity is None:
             return  # a set_quantity must carry a quantity; never null an existing line
-        if idx is None:
+        if match_index is None:
             items.append(item)
         else:
-            items[idx] = items[idx].model_copy(update={"quantity": item.quantity})
+            items[match_index] = items[match_index].model_copy(update={"quantity": item.quantity})
     elif op.op is CartOpKind.REMOVE:
-        if idx is not None:
-            items.pop(idx)
+        if match_index is not None:
+            items.pop(match_index)
