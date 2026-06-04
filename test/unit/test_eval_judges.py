@@ -59,9 +59,9 @@ def test_extraction_scores_zero_for_the_wrong_quantity():
 def test_extraction_uses_cart_unchanged_for_a_question_turn():
     before = _cart(("DELI-16", 2))
     expected = {"skus": [], "quantities": [], "cart_unchanged": True}
-    assert extraction_score(expected, before, cart_before=before) == 1.0
+    assert extraction_score(expected, before, starting_cart=before) == 1.0
     # a question turn that mutated the cart is wrong
-    assert extraction_score(expected, Cart(), cart_before=before) == 0.0
+    assert extraction_score(expected, Cart(), starting_cart=before) == 0.0
 
 
 def test_clarification_is_correct_only_when_asking_matches_expectation():

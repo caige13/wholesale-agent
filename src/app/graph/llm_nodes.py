@@ -1,8 +1,11 @@
-"""LLM-backed graph nodes — intent classification, order parsing, and RAG Q&A.
+"""LLM-backed graph nodes — intent classification and order parsing.
 
 Each node takes the injected LangChain chat model (Gemini at runtime, a fake in
 tests) and calls it; this module imports no LangChain itself, so the contract
 tests stay keyless. The structured-output schemas below are what the model fills.
+
+The QUESTION path is no longer here: it's a tool-calling subgraph that the model
+drives (see ``subgraphs/qa_agent``), embedded directly in the root graph.
 
 The probabilistic quality of these nodes (did it parse/classify correctly?) is
 the eval set's job — the contract tests here only pin the state shape & routing.
@@ -22,7 +25,6 @@ from src.domain.models import (
     Companion,
     Intent,
     LineItem,
-    ResolutionCandidate,
 )
 from src.ports import CatalogRepository
 
@@ -70,9 +72,15 @@ class IntentResult(BaseModel):
 # --- Prompts ----------------------------------------------------------------
 _INTENT_INSTRUCTIONS = (
     "Classify the restaurant's message as one of: 'order' (placing/adding items), "
-    "'reorder' (repeat a usual order), or 'question' (asking about a product). "
+    "'reorder' (repeat a usual order), 'question' (asking about a product), or "
+    "'escalate'. "
     "A short reply that accepts or declines a pending add-on offer ('yes', 'yes "
     "please', 'sure', 'add them', 'no thanks') is an 'order', not a 'question'.\n"
+    "Use 'escalate' ONLY when the user explicitly asks for a human/representative "
+    "('let me talk to someone', 'can I get a person', 'this isn't working'), or asks "
+    "for something the order desk cannot do — returns, refunds, disputes/chargebacks, "
+    "billing or account changes, or cancelling a placed order. A normal product "
+    "question the catalog might not cover is still 'question', NOT 'escalate'.\n"
     "Message:\n"
 )
 _PARSE_INSTRUCTIONS = (
@@ -90,7 +98,14 @@ _PARSE_INSTRUCTIONS = (
     "- 'set_quantity' when the item is ALREADY in the current cart and the user "
     "states a new total — e.g. 'make it 3', 'change the deli to 3 cases'. Do NOT "
     "use 'add' for these; set the quantity to the new total.\n"
-    "- 'remove' to drop an item that's in the cart ('drop the limes').\n\n"
+    "- 'remove' to drop an item that's in the cart ('drop the limes').\n"
+    "If the user's whole message is just an affirmation ('yes', 'yea', 'sure', 'go "
+    "ahead', 'please do') and the assistant's most recent turn offered to place an "
+    "order for a SPECIFIC product, treat it as an 'add' for that product: use the "
+    "product wording from that offer, and the quantity it (or an earlier turn) "
+    "stated — leave quantity null if none was stated and the system will ask. This "
+    "is for a primary product the assistant proposed ordering; accepted add-on "
+    "offers instead go in accepted_companions (below), never in items.\n\n"
     "Pending add-on offer (the assistant already proposed adding these alongside "
     "items in the cart):\n{offer}\n"
     "If the user agrees to some or all of these add-ons ('yes', 'yes please', "
@@ -107,14 +122,7 @@ _PARSE_INSTRUCTIONS = (
     "they're done (e.g. 'add napkins and that's it' → add napkins AND place_order=true)."
     "\n\nCurrent cart:\n{cart}\n\nMessage:\n{message}"
 )
-_QA_INSTRUCTIONS = (
-    "Answer the restaurant's product question using only the catalog context. Be "
-    "concise. If the context doesn't cover it, say so.\n\n"
-    "Context:\n{context}\n\nQuestion:\n{question}"
-)
-
-
-# --- Nodes (graph order: intent -> parse ... and the question branch) -------
+# --- Nodes (graph order: intent -> parse; the question branch is a subgraph) -
 def intent_node(state: dict, model: BaseChatModel) -> dict:
     prompt = _format_history(state.get("history")) + _INTENT_INSTRUCTIONS + state["clean_message"]
     result = model.with_structured_output(IntentResult).invoke(prompt)
@@ -169,37 +177,4 @@ def _cart_context(cart) -> str:
         return "(cart is empty)"
     return "\n".join(
         f"- {item.quantity} x {item.product_name} ({item.sku})" for item in cart.all_lines()
-    )
-
-
-def rag_qa_node(state: dict, model: BaseChatModel, catalog: CatalogRepository) -> dict:
-    candidates = catalog.find_candidates(state["clean_message"], k=3)
-    prompt = _QA_INSTRUCTIONS.format(
-        context=_format_context(candidates), question=state["clean_message"]
-    )
-    return {"answer": _message_text(model.invoke(prompt))}
-
-
-def _message_text(message: object) -> str:
-    """Flatten a chat message's content to text. Gemini returns a list of content
-    blocks (e.g. ``[{"type": "text", "text": "..."}]``); others return a string.
-    """
-    content = getattr(message, "content", message)
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = [
-            block.get("text", "") if isinstance(block, dict) else str(block)
-            for block in content
-        ]
-        return "".join(parts)
-    return str(content)
-
-
-def _format_context(candidates: list[ResolutionCandidate]) -> str:
-    if not candidates:
-        return "(no matching catalog entries)"
-    return "\n".join(
-        f"- {c.item.product_name} ({c.item.unit_size}, {c.item.case_pack} per case)"
-        for c in candidates
     )

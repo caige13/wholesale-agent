@@ -10,28 +10,59 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage
+
 from src.app.graph.llm_nodes import IntentResult, ParsedOrder
 from src.domain.cart import Cart
-from src.domain.models import CatalogItem, InventoryStatus, OrderConfirmation
+from src.domain.models import CatalogItem, Handoff, InventoryStatus, OrderConfirmation
 from src.ports.order_agent import AgentResult
 
 SUPPLIER = "acme-foodservice"
 
 
 class ScriptedModel:
-    """Fake chat model: canned intent + parse results, and a canned QA answer."""
+    """Fake chat model for the order graph — keyless, no real LLM.
 
-    def __init__(self, intent, parsed=None, answer=""):
+    Covers the three ways the graph calls a model:
+    - ``with_structured_output`` for intent classification + order parsing (canned).
+    - ``bind_tools`` for the QA subgraph's assistant<->tools loop. With ``tool_steps``
+      left ``None`` the bound model answers immediately (no tool calls, content =
+      ``answer``); pass ``tool_steps`` to script a sequence — a list of
+      ``{"name", "args"}`` dicts becomes an ``AIMessage`` with those ``tool_calls``,
+      a plain string becomes the final answer ``AIMessage``.
+    """
+
+    def __init__(self, intent, parsed=None, answer="", tool_steps=None):
         self._intent = intent
         self._parsed = parsed or ParsedOrder()
         self._answer = answer
+        self._tool_steps = tool_steps
 
     def with_structured_output(self, schema):
         result = IntentResult(intent=self._intent) if schema is IntentResult else self._parsed
         return SimpleNamespace(invoke=lambda _prompt: result)
 
-    def invoke(self, _prompt):
-        return SimpleNamespace(content=self._answer)
+    def bind_tools(self, _tools):
+        steps = list(self._tool_steps) if self._tool_steps is not None else None
+
+        def _invoke(_messages):
+            if steps is None:  # no script: the model just answers
+                return AIMessage(content=self._answer)
+            step = steps.pop(0)
+            if isinstance(step, str):  # a string step is the final answer
+                return AIMessage(content=step)
+            tool_calls = [  # a list step is one round of tool calls
+                {
+                    "name": c["name"],
+                    "args": c.get("args", {}),
+                    "id": c.get("id", f"call_{i}"),
+                    "type": "tool_call",
+                }
+                for i, c in enumerate(step)
+            ]
+            return AIMessage(content="", tool_calls=tool_calls)
+
+        return SimpleNamespace(invoke=_invoke)
 
 
 class FakeCatalog:
@@ -72,6 +103,18 @@ class FakeSupplier:
         return OrderConfirmation(order_id="TEST-ORDER", supplier=self.supplier)
 
 
+class FakeEscalation:
+    """Fake escalation gateway: returns a deterministic handoff ticket, keyless."""
+
+    def create_handoff(self, reason, summary) -> Handoff:
+        return Handoff(
+            ticket_id="TEST-HANDOFF",
+            reason=reason,
+            callback_number="1-800-555-0000",
+            eta_minutes=15,
+        )
+
+
 class FakeOrderAgent:
     """Stub inner agent: returns a preset AgentResult and records each call as
     ``(message, cart, history)``; ``last_history`` reads the most recent one."""
@@ -84,9 +127,15 @@ class FakeOrderAgent:
     def last_history(self):
         return self.calls[-1][2] if self.calls else None
 
-    def run(self, message: str, cart: Cart, history=None) -> AgentResult:
+    def run(
+        self, message: str, cart: Cart, history=None, *, trace=None, thread_id="default"
+    ) -> AgentResult:
+        # trace/thread_id are observability/persistence-only; the stub records inputs.
         self.calls.append((message, cart, history))
         return self._result
+
+    def record_turn(self, message, reply, *, thread_id="default") -> None:
+        return  # no persistence in the stub; the checkpointer-backed agent implements it
 
 
 def catalog_item(sku, name, **kw) -> CatalogItem:

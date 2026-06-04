@@ -1,0 +1,50 @@
+name: CI
+
+# Gate every PR (and pushes to main) on a green suite. Evals are excluded by the
+# pyproject `addopts = -m 'not eval'`, so no API keys/secrets are needed here.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch/PR supersedes the in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      - name: Install dev tooling
+        run: uv sync                      # core + dev group (ruff, pytest)
+      - name: Ruff
+        run: uv run ruff check .          # mirrors `make lint`
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.13"
+      # The real-FAISS integration test downloads the sentence-transformers
+      # embedding model once; cache it so reruns don't re-fetch it.
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-v1
+      - name: Install the full agent runtime
+        run: uv sync --extra agent        # mirrors `make setup-agent`
+      - name: Run the suite
+        run: uv run pytest                # mirrors `make test` (evals excluded by addopts)

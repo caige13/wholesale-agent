@@ -62,7 +62,7 @@ to stay under quota; raise it on a paid tier for a snappier UI.
 graph TD
     START([User message]) --> redact[redact_normalize<br/>strip PII · normalize units]
     redact --> intent{intent}
-    intent -->|question| ragqa[rag_qa<br/>answer from catalog]
+    intent -->|question| ragqa[rag_qa subgraph<br/>model ⇄ tools: search_catalog · check_inventory · get_price]
     intent -->|order / reorder / yes-to-offer| parse[parse_order<br/>cart_ops + accepted_companions]
     parse --> resolve[resolve_skus<br/>retriever candidates -> SKU + confidence]
     resolve --> companions[add_companions<br/>accepted offer -> ADD by SKU · qty = companion_case_count]
@@ -79,7 +79,12 @@ graph TD
 
 `redact_normalize` runs first, as a front-door guardrail, so PII never reaches
 the LLM or the trace. Deterministic nodes are pure functions; `intent`,
-`parse_order`, and `rag_qa` are the only LLM calls.
+`parse_order`, and the `rag_qa` subgraph are the only LLM calls. `rag_qa` is a real
+**tool-calling loop** (`bind_tools` → `ToolNode` → `ToolMessage`): the model decides
+which read-only tool to call — `search_catalog` over the FAISS catalog,
+`check_inventory` / `get_price` over the supplier — and loops until it answers. It's
+compiled as its own subgraph and embedded as a single node, so the root graph stays a
+linear pipeline (and `parent.stream(subgraphs=True)` can stream the answer tokens).
 
 **Companion add-ons (upsell) are data-driven, coverage-based, and the loop is the
 conversation.** A catalog item names its pairings via `companion_skus` (e.g. a deli
@@ -112,7 +117,8 @@ src/
   adapters/      Concrete implementations — JsonCatalogRepository, FaissCatalogRepository.
   app/
     turn.py      handle_turn — the UX boundary the UI delegates to.
-    graph/       OrderState, the deterministic + LLM nodes, the gate, and build_graph.
+    graph/       OrderState, the deterministic + LLM nodes, the gate, build_graph,
+                 and subgraphs/ (the QA tool-calling agent + its read-only tools).
   interfaces/    Gradio UI (a thin mirror of graph state).
   bootstrap.py   Composition root — the only place that wires concrete adapters + models.
 evals/           Dataset, deterministic judges + the GPT-4o answer judge, run_eval.
@@ -132,6 +138,15 @@ every concrete adapter.
   `with_structured_output` / `bind_tools` and break tracing. Custom ports exist
   *only* where LangChain has no concept — the catalog repository and the inner
   agent.
+
+- **Tools are model-driven only where it's safe: the read-only question path.** The
+  catalog/supplier lookups are real LangChain `StructuredTool`s, and the QUESTION branch
+  is a genuine tool-calling agent (`bind_tools` + `ToolNode`), not a single canned RAG
+  call. The **order-write** path is deliberately *not* tool-driven: SKU resolution, the
+  clarify/draft gate, and `submit_order` stay deterministic typed calls, so the model can
+  answer questions but can never silently place or mutate an order. The tools and the
+  deterministic nodes share the same adapters underneath — a tool is just the model-facing
+  face of a port.
 
 - **Catalog (RAG) vs. supplier API — static vs. dynamic.** The catalog is the
   semantic knowledge base (names, aliases, case packs, companions) and lives in the
@@ -195,6 +210,14 @@ A representative run: **extraction 92%, clarification 83%, answer faithfulness
 (`out_of_stock`, `reorder_usual`) — the eval surfacing them is the point, not a
 number to game; the dataset's expectations are never relaxed to pass.
 
+`make eval` runs that local, keyless-friendly runner. `make eval-langsmith`
+(`uv run python -m evals.langsmith_eval`) is its in-platform sibling: it **syncs** the
+JSONL into a LangSmith **Dataset** (`order-desk` — examples keyed by a deterministic id,
+so a run creates missing rows and updates changed ones rather than drifting) and runs
+`langsmith.evaluate()` over the **same** `evals/judges.py` metrics, so experiments are
+versioned and comparable (model-vs-model, per-row) in the UI without the two paths ever
+drifting. Needs `LANGSMITH_API_KEY`.
+
 ---
 
 ## What I'd improve with more time
@@ -204,14 +227,14 @@ number to game; the dataset's expectations are never relaxed to pass.
   handling already exist; only the data source is stubbed out.)
 - **Reorder / item-memory** — populate per-restaurant memory so "the usual"
   resolves.
-- **Multi-turn resume** — today the graph is single-turn and the UI passes recent
-  chat history into the prompt so follow-ups ("yes, 16oz") have context. The
-  production version is a LangGraph **checkpointer + `interrupt()`/resume** keyed
-  by thread id.
+- **`interrupt()`/resume** — conversation state now lives in a LangGraph
+  **checkpointer** (the agent records each turn, keyed by thread id; the UI no longer
+  threads history), and the cart is the UI's directly-editable document. The remaining
+  production step is `interrupt()`/resume for a mid-turn approval gate (e.g. confirming
+  a high-value order) — a better fit than re-running clarification turns.
 - **`set_quantity` robustness** — "make it 3" now classifies correctly, but it's
   LLM-dependent; a few-shot example in the parse prompt would harden it against
   regressions (the eval is what would catch one).
-- **Streaming** — stream tokens/steps to the UI via `graph.stream`.
 - **Multi-supplier** — the cart and catalog are supplier-keyed from day one;
   Stage 2 is "add catalog rows + a supplier adapter," not a graph rewrite.
 
@@ -219,7 +242,29 @@ number to game; the dataset's expectations are never relaxed to pass.
 
 ## Observability
 
-With `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY`, every turn traces to the
-`LANGSMITH_PROJECT`. In the trace tree you can see the `gate` decision, the
-`pii_found` guardrail firing, and `cart_ops → draft_cart` showing the per-turn
-mutation.
+Tracing is **wired in code**, not just left to ambient env vars:
+`observability.configure_tracing(settings)` applies the `LANGSMITH_*` settings at each
+entry point (so the `Settings` fields are the single source of truth and the toggle is
+logged on startup). With `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY`, every turn
+traces to `LANGSMITH_PROJECT`.
+
+Each run is **labeled at creation** from the one boundary (`LangGraphOrderAgent.run`),
+so the nodes stay pure and there's no extra round-trip:
+
+- **run name** `order_desk_{surface}` and tag `surface:{ui|eval|smoke}`, set via the
+  invoke `RunnableConfig` — conflict-free because it's part of the run's create payload;
+- the **eval-row id** on eval runs (find any dataset row in the UI) as run metadata.
+
+The turn's **outcome** (`intent`, `status`, `clarifications`, `confirmation`) isn't
+re-attached as metadata — it's already the run's **outputs** (they're keys in the graph's
+final state), so the trace shows it for free. (Patching it back on post-hoc would race
+the background tracer — a 409 — and block on the network, so we don't.) In the trace tree
+you also see the gate's `clarify`-vs-`draft` branch, the `pii_found` guardrail firing,
+and `cart_ops → draft_cart` showing the per-turn mutation.
+
+Logging is complementary to tracing, not replaced by it: tracing is optional and remote,
+so a failed turn (LLM error, rate limit, malformed output) is logged at the agent
+boundary as an always-on signal, then re-raised. `configure_logging()` holds the root
+(and all third-party libraries) at `WARNING` and raises only this app's loggers to
+`INFO`, so a healthy production turn emits nothing — only the startup line and real
+errors surface.

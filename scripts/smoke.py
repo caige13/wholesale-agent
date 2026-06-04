@@ -8,6 +8,7 @@ Needs: GOOGLE_API_KEY in .env (set LANGSMITH_TRACING=true + LANGSMITH_API_KEY to
 capture a trace). First run downloads the embedding model + builds the index.
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -18,6 +19,12 @@ from src.app.turn import handle_turn  # noqa: E402
 from src.bootstrap import build_agent  # noqa: E402
 from src.config import get_settings  # noqa: E402
 from src.domain.cart import Cart  # noqa: E402
+from src.observability import (  # noqa: E402
+    TraceContext,
+    configure_logging,
+    configure_tracing,
+    tracing_status_line,
+)
 
 # A conversation that exercises every path: clean order, alias, a PII guardrail,
 # an ambiguous item (should clarify), and an interleaved question (cart unchanged).
@@ -46,14 +53,18 @@ def main() -> None:
     if not settings.google_api_key:
         sys.exit("GOOGLE_API_KEY is not set — add it to .env first.")
 
-    print(f"model={settings.gemini_model}  embeddings={settings.embedding_model}")
-    print(f"langsmith tracing={settings.langsmith_tracing} project={settings.langsmith_project}")
-    print("building agent (downloads model + builds FAISS index on first run)…\n")
+    configure_logging()
+    log = logging.getLogger(__name__)
+    tracing = configure_tracing(settings)
+    log.info("model=%s embeddings=%s", settings.gemini_model, settings.embedding_model)
+    log.info(tracing_status_line(settings, tracing))
+    log.info("building agent (downloads model + builds FAISS index on first run)…")
     agent = build_agent()
 
     cart = Cart()
-    for turn in TURNS:
-        result = handle_turn(turn, cart, agent)
+    for i, turn in enumerate(TURNS):
+        trace = TraceContext(surface="smoke", metadata={"turn_index": i}) if tracing else None
+        result = handle_turn(turn, cart, agent, trace=trace)
         cart = result.cart  # persist across turns, like the UI's gr.State
         print(f"USER: {turn}")
         print(f"AGENT: {result.reply}")

@@ -13,7 +13,6 @@ from src.app.graph.llm_nodes import (
     ParsedOrder,
     intent_node,
     parse_node,
-    rag_qa_node,
 )
 from src.domain.cart import Cart
 from src.domain.models import CartOpKind, Intent
@@ -33,16 +32,6 @@ class FakeStructuredModel:
             return self._result
 
         return SimpleNamespace(invoke=_invoke)
-
-
-class FakeChatModel:
-    """Stands in for a chat model called via .invoke() returning a message."""
-
-    def __init__(self, content):
-        self._content = content
-
-    def invoke(self, _prompt):
-        return SimpleNamespace(content=self._content)
 
 
 def test_intent_node_routes_to_the_classified_intent():
@@ -88,17 +77,3 @@ def test_parse_node_includes_recent_history_so_follow_ups_have_context():
     }
     parse_node(state, model, FakeCatalog())
     assert "which deli size did you mean?" in model.prompt
-
-
-def test_rag_qa_node_returns_an_answer_without_touching_the_cart():
-    model = FakeChatModel("Each case has 500 units.")
-    out = rag_qa_node({"clean_message": "how many per case?"}, model, FakeCatalog())
-    assert out["answer"] == "Each case has 500 units."
-    assert "draft_cart" not in out  # the question path must not mutate the cart
-
-
-def test_rag_qa_node_flattens_list_content_blocks_into_text():
-    # Gemini returns content as a list of blocks; the answer must still be a string.
-    model = FakeChatModel([{"type": "text", "text": "Each case has 500 units."}])
-    out = rag_qa_node({"clean_message": "how many per case?"}, model, FakeCatalog())
-    assert out["answer"] == "Each case has 500 units."

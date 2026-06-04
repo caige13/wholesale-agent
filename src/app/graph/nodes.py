@@ -26,7 +26,7 @@ from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
 from src.domain.redaction import redact_normalize
 from src.domain.resolution import resolve_skus
 from src.domain.rules import validate_rules
-from src.ports import CatalogRepository, SupplierGateway
+from src.ports import CatalogRepository, EscalationGateway, SupplierGateway
 
 
 def redact_node(state: dict) -> dict:
@@ -231,6 +231,21 @@ def draft_node(state: dict, supplier: SupplierGateway) -> dict:
         return {"status": OrderStatus.DRAFTED}
     confirmation = supplier.submit_order(cart.all_lines())
     return {"status": OrderStatus.SUBMITTED, "confirmation": confirmation}
+
+
+def escalate_node(state: dict, escalation: EscalationGateway) -> dict:
+    """Hand the turn off to a human — the terminal escalation branch.
+
+    Reached when intent routing classifies the turn as ESCALATE (the user asked for a
+    person, or for something the order desk can't do). Opens a handoff ticket via the
+    gateway and stops: the cart is left untouched (no order mutation on the way out),
+    and the UI renders the ticket so the customer knows a specialist will follow up.
+    """
+    handoff = escalation.create_handoff(
+        reason="customer requested a human or an unsupported action",
+        summary=state.get("clean_message", ""),
+    )
+    return {"handoff": handoff, "status": OrderStatus.ESCALATED}
 
 
 def clarify_node(state: dict) -> dict:

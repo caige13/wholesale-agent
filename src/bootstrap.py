@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from langchain_core.embeddings import Embeddings
 
-from src.adapters import JsonCatalogRepository, MockSupplierGateway
+from src.adapters import JsonCatalogRepository, MockEscalationGateway, MockSupplierGateway
 from src.adapters.faiss_catalog_repository import FaissCatalogRepository
 from src.config import get_settings
-from src.ports import CatalogRepository, SupplierGateway
+from src.ports import CatalogRepository, EscalationGateway, SupplierGateway
 
 
 def build_embeddings() -> Embeddings:
@@ -34,6 +34,11 @@ def build_catalog_repository(embeddings: Embeddings | None = None) -> CatalogRep
 def build_supplier_gateway() -> SupplierGateway:
     """The keyless JSON-backed supplier gateway (price / stock / order submission)."""
     return MockSupplierGateway()
+
+
+def build_escalation_gateway() -> EscalationGateway:
+    """The keyless mock human-handoff gateway (opens a deterministic handoff ticket)."""
+    return MockEscalationGateway()
 
 
 def build_chat_model():
@@ -75,7 +80,14 @@ def build_judge_model():
 
 
 def build_agent(item_memory: dict[str, str] | None = None):
-    """Wire the full order-desk agent: Gemini + FAISS catalog behind the graph."""
+    """Wire the full order-desk agent: Gemini + FAISS catalog behind the graph.
+
+    Compiled with a ``MemorySaver`` so ``OrderState`` persists per ``thread_id`` (the
+    persistence foundation for resume), and with the escalation gateway so the
+    human-handoff branch + ``escalate_to_human`` tool are live.
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+
     from src.app.graph.agent import LangGraphOrderAgent
     from src.app.graph.graph import build_graph
 
@@ -84,5 +96,7 @@ def build_agent(item_memory: dict[str, str] | None = None):
         build_catalog_repository(),
         build_supplier_gateway(),
         item_memory,
+        escalation=build_escalation_gateway(),
+        checkpointer=MemorySaver(),
     )
     return LangGraphOrderAgent(graph)

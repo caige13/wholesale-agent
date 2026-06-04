@@ -10,7 +10,7 @@ import pytest
 _DATASET = Path(__file__).resolve().parents[2] / "evals" / "datasets" / "order_desk.jsonl"
 
 REQUIRED_EXPECTED_KEYS = {"skus", "suppliers", "quantities", "expects_clarification"}
-OPTIONAL_EXPECTED_KEYS = {"cart_unchanged", "pii_redacted", "submitted"}
+OPTIONAL_EXPECTED_KEYS = {"cart_unchanged", "pii_redacted", "submitted", "expects_escalation"}
 
 
 def _load_rows() -> list[dict]:
@@ -38,8 +38,8 @@ def test_each_row_matches_the_spec_schema(row: dict):
     # skus / suppliers / quantities are parallel lists.
     assert len(expected["skus"]) == len(expected["suppliers"]) == len(expected["quantities"])
     assert isinstance(expected["expects_clarification"], bool)
-    if "cart_before" in row:
-        assert isinstance(row["cart_before"], dict)
+    if "starting_cart" in row:
+        assert isinstance(row["starting_cart"], dict)
 
 
 def test_includes_every_required_eval_case():

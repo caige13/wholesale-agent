@@ -15,7 +15,7 @@ from src.domain.cart import Cart
 def extraction_score(
     expected: dict,
     final_cart: Cart,
-    cart_before: Cart | None = None,
+    starting_cart: Cart | None = None,
 ) -> float:
     """How well the final cart matches what the turn should have produced.
 
@@ -24,7 +24,7 @@ def extraction_score(
     credit when some lines are right.
     """
     if expected.get("cart_unchanged"):
-        return 1.0 if _pairs(final_cart) == _pairs(cart_before or Cart()) else 0.0
+        return 1.0 if _pairs(final_cart) == _pairs(starting_cart or Cart()) else 0.0
 
     expected_pairs = set(zip(expected["skus"], expected["quantities"], strict=True))
     actual_pairs = _pairs(final_cart)
@@ -47,6 +47,16 @@ def submission_correct(expected: bool, submitted: bool) -> bool:
     order"). ``submitted`` is whether the agent produced a supplier confirmation.
     """
     return expected == submitted
+
+
+def escalation_correct(expected: bool, escalated: bool) -> bool:
+    """Did the agent hand off to a human exactly when it should? (the escalation branch)
+
+    ``escalated`` is whether the agent produced a handoff ticket. The desk should
+    escalate only on an explicit human request or an out-of-scope action — never as a
+    way out of a normal order/question it can handle.
+    """
+    return expected == escalated
 
 
 class JudgeVerdict(BaseModel):

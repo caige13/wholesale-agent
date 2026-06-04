@@ -150,6 +150,21 @@ class OrderConfirmation(BaseModel):
     total: float | None = None
 
 
+class Handoff(BaseModel):
+    """A human-handoff ticket — the escalation gateway's acknowledgement.
+
+    Created when the agent routes a turn to a human (the user asked for a person, or
+    for something the order desk can't do — returns, billing, disputes). The
+    counterpart to ``OrderConfirmation``: a stable id plus the few fields the UI
+    renders so the customer knows a specialist will follow up.
+    """
+
+    ticket_id: str
+    reason: str
+    callback_number: str
+    eta_minutes: int = 15
+
+
 class Intent(StrEnum):
     """What the user is doing this turn — routes the graph after redaction.
 
@@ -159,6 +174,9 @@ class Intent(StrEnum):
     ORDER = "order"
     REORDER = "reorder"
     QUESTION = "question"
+    # The user wants a human, or asks for something outside the order desk (returns,
+    # refunds, disputes, billing/account changes, cancellations) — routes to handoff.
+    ESCALATE = "escalate"
 
 
 class OrderStatus(StrEnum):
@@ -169,3 +187,4 @@ class OrderStatus(StrEnum):
     DRAFTED = "drafted"
     CONFIRMED = "confirmed"
     SUBMITTED = "submitted"
+    ESCALATED = "escalated"  # handed off to a human; the turn ends without an order edit
