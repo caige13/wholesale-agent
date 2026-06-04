@@ -215,7 +215,7 @@ probabilistic behavior is measured by the eval, never asserted in a unit test.
 | **Integration** | graph wiring + FAISS retriever | fake LLM / real embeddings — clean→drafted, ambiguous→clarify, question→answer + cart unchanged |
 | **Eval** | end-to-end quality | LangSmith dataset + the two metrics (marked `@pytest.mark.eval`, skipped by default) |
 
-`make test` runs the first three (≈150 tests, fast, keyless). The code was built
+`make test` runs the first three (246 tests, fast, keyless). The code was built
 test-first; the commit history follows that order.
 
 ---
