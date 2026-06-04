@@ -24,30 +24,56 @@ the LLM nodes, and **LangSmith** for tracing + evals.
 
 ## Quickstart
 
-Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.11.
+Requires Python ≥ 3.11. **Three lines to a running app** — no `uv`, no `make`,
+just Python:
 
 ```bash
-make setup        # core + dev deps only — fast, no API key, runs the test suite
-make test         # unit + contract + integration tests (evals skipped by default)
-make lint
+python run.py setup     # create .venv + install the runtime (torch, faiss, gradio, …)
+cp .env.example .env    # add your GOOGLE_API_KEY
+python run.py ui        # launch the Gradio order desk
 ```
 
-The deterministic core (parsing rules, cart math, the gate, SKU resolution) is
-fully testable **keyless** — `make setup && make test` needs no API keys.
+### Pick any toolchain — they're interchangeable
 
-To run the agent (LLM + RAG + UI), install the heavier group and add keys:
+`run.py` (pip), `uv`, and `make` run the same code with the same dependencies
+(`requirements.txt` is generated from `uv.lock`, so the pip path never drifts):
+
+| Task | just Python — `run.py` | [uv](https://docs.astral.sh/uv/) | make |
+| --- | --- | --- | --- |
+| Install the app | `python run.py setup` | `uv sync --extra agent` | `make setup-agent` |
+| + test/lint tools | `python run.py setup-dev` | `uv sync --extra agent` | `make setup-agent` |
+| Launch the UI | `python run.py ui` | `uv run python -m src.interfaces.gradio_app` | `make ui` |
+| Run the tests | `python run.py test` | `uv run pytest` | `make test` |
+| Lint | `python run.py lint` | `uv run ruff check .` | `make lint` |
+
+> **No uv?** Use the `run.py` column (or plain `pip install -r requirements.txt`).
+> `make` is a thin wrapper over `uv`, so it needs `uv` installed.
+> Already in a virtualenv/conda env? `run.py` installs into it instead of `.venv`.
+
+### Keys & the keyless core
+
+The deterministic core (parsing, cart math, the clarify gate, SKU resolution) is
+fully testable **without any API key**. With uv, `make setup && make test` installs
+just the lightweight core + test tooling and runs the suite keyless. The full app
+(LLM + RAG + UI) needs `GOOGLE_API_KEY`; the eval judge also needs `OPENAI_API_KEY`.
 
 ```bash
-make setup-agent           # langgraph, langchain, faiss, sentence-transformers, gradio, …
-cp .env.example .env       # then fill in GOOGLE_API_KEY (and OPENAI_API_KEY for the eval judge)
-```
-
-### Run it
-
-```bash
-make ui                          # Gradio chat + cart panel  (needs GOOGLE_API_KEY)
+python run.py eval               # score the agent over the dataset (needs keys)
 uv run python scripts/smoke.py   # drive a scripted multi-turn conversation in the terminal
-uv run python -m evals.run_eval  # score the agent over the dataset (the two metrics + LLM judge)
+```
+
+First UI run downloads the local embedding model (~90 MB) and builds the FAISS
+index in-process. The Gemini free tier is 5 req/min — `GEMINI_RPM` self-throttles
+to stay under quota; raise it on a paid tier for a snappier UI.
+
+### Fully isolated check (Docker)
+
+To set up and run the suite in a clean OS-level sandbox (mirrors CI — `ruff` + the
+keyless suite, no keys needed):
+
+```bash
+docker build -t wholesale-agent-test .
+docker run --rm wholesale-agent-test
 ```
 
 First run downloads the local embedding model (~90 MB) and builds the FAISS
