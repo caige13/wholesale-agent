@@ -227,14 +227,14 @@ drifting. Needs `LANGSMITH_API_KEY`.
   handling already exist; only the data source is stubbed out.)
 - **Reorder / item-memory** — populate per-restaurant memory so "the usual"
   resolves.
-- **Multi-turn resume** — today the graph is single-turn and the UI passes recent
-  chat history into the prompt so follow-ups ("yes, 16oz") have context. The
-  production version is a LangGraph **checkpointer + `interrupt()`/resume** keyed
-  by thread id.
+- **`interrupt()`/resume** — conversation state now lives in a LangGraph
+  **checkpointer** (the agent records each turn, keyed by thread id; the UI no longer
+  threads history), and the cart is the UI's directly-editable document. The remaining
+  production step is `interrupt()`/resume for a mid-turn approval gate (e.g. confirming
+  a high-value order) — a better fit than re-running clarification turns.
 - **`set_quantity` robustness** — "make it 3" now classifies correctly, but it's
   LLM-dependent; a few-shot example in the parse prompt would harden it against
   regressions (the eval is what would catch one).
-- **Streaming** — stream tokens/steps to the UI via `graph.stream`.
 - **Multi-supplier** — the cart and catalog are supplier-keyed from day one;
   Stage 2 is "add catalog rows + a supplier adapter," not a graph rewrite.
 

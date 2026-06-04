@@ -49,6 +49,16 @@ def submission_correct(expected: bool, submitted: bool) -> bool:
     return expected == submitted
 
 
+def escalation_correct(expected: bool, escalated: bool) -> bool:
+    """Did the agent hand off to a human exactly when it should? (the escalation branch)
+
+    ``escalated`` is whether the agent produced a handoff ticket. The desk should
+    escalate only on an explicit human request or an out-of-scope action — never as a
+    way out of a normal order/question it can handle.
+    """
+    return expected == escalated
+
+
 class JudgeVerdict(BaseModel):
     """An LLM judge's structured verdict on an open-ended answer."""
 

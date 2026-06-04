@@ -29,6 +29,7 @@ from evals._data import cart_from, format_context, load_rows  # noqa: E402
 from evals.judges import (  # noqa: E402
     answer_faithfulness,
     clarification_correct,
+    escalation_correct,
     extraction_score,
     submission_correct,
 )
@@ -37,6 +38,7 @@ from src.app.graph.graph import build_graph  # noqa: E402
 from src.bootstrap import (  # noqa: E402
     build_catalog_repository,
     build_chat_model,
+    build_escalation_gateway,
     build_judge_model,
     build_supplier_gateway,
 )
@@ -131,6 +133,7 @@ def make_target(agent):
             "clarifications": result.clarifications,
             "answer": result.answer,
             "submitted": bool(result.confirmation),
+            "escalated": bool(result.handoff),
         }
 
     return target
@@ -154,6 +157,13 @@ def clarification_evaluator(run, example) -> dict:
 def submission_evaluator(run, example) -> dict:
     correct = submission_correct(example.outputs.get("submitted", False), run.outputs["submitted"])
     return {"key": "submission", "score": correct}
+
+
+def escalation_evaluator(run, example) -> dict:
+    correct = escalation_correct(
+        example.outputs.get("expects_escalation", False), run.outputs["escalated"]
+    )
+    return {"key": "escalation", "score": correct}
 
 
 def make_faithfulness_evaluator(catalog, judge):
@@ -187,9 +197,19 @@ def main() -> None:
     # lookup, so we embed the catalog a single time.
     catalog = build_catalog_repository()
     agent = LangGraphOrderAgent(
-        build_graph(build_chat_model(), catalog, build_supplier_gateway())
+        build_graph(
+            build_chat_model(),
+            catalog,
+            build_supplier_gateway(),
+            escalation=build_escalation_gateway(),
+        )
     )
-    evaluators = [extraction_evaluator, clarification_evaluator, submission_evaluator]
+    evaluators = [
+        extraction_evaluator,
+        clarification_evaluator,
+        submission_evaluator,
+        escalation_evaluator,
+    ]
     if settings.openai_api_key:
         evaluators.append(make_faithfulness_evaluator(catalog, build_judge_model()))
     else:

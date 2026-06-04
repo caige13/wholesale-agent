@@ -72,9 +72,15 @@ class IntentResult(BaseModel):
 # --- Prompts ----------------------------------------------------------------
 _INTENT_INSTRUCTIONS = (
     "Classify the restaurant's message as one of: 'order' (placing/adding items), "
-    "'reorder' (repeat a usual order), or 'question' (asking about a product). "
+    "'reorder' (repeat a usual order), 'question' (asking about a product), or "
+    "'escalate'. "
     "A short reply that accepts or declines a pending add-on offer ('yes', 'yes "
     "please', 'sure', 'add them', 'no thanks') is an 'order', not a 'question'.\n"
+    "Use 'escalate' ONLY when the user explicitly asks for a human/representative "
+    "('let me talk to someone', 'can I get a person', 'this isn't working'), or asks "
+    "for something the order desk cannot do — returns, refunds, disputes/chargebacks, "
+    "billing or account changes, or cancelling a placed order. A normal product "
+    "question the catalog might not cover is still 'question', NOT 'escalate'.\n"
     "Message:\n"
 )
 _PARSE_INSTRUCTIONS = (
@@ -92,7 +98,14 @@ _PARSE_INSTRUCTIONS = (
     "- 'set_quantity' when the item is ALREADY in the current cart and the user "
     "states a new total — e.g. 'make it 3', 'change the deli to 3 cases'. Do NOT "
     "use 'add' for these; set the quantity to the new total.\n"
-    "- 'remove' to drop an item that's in the cart ('drop the limes').\n\n"
+    "- 'remove' to drop an item that's in the cart ('drop the limes').\n"
+    "If the user's whole message is just an affirmation ('yes', 'yea', 'sure', 'go "
+    "ahead', 'please do') and the assistant's most recent turn offered to place an "
+    "order for a SPECIFIC product, treat it as an 'add' for that product: use the "
+    "product wording from that offer, and the quantity it (or an earlier turn) "
+    "stated — leave quantity null if none was stated and the system will ask. This "
+    "is for a primary product the assistant proposed ordering; accepted add-on "
+    "offers instead go in accepted_companions (below), never in items.\n\n"
     "Pending add-on offer (the assistant already proposed adding these alongside "
     "items in the cart):\n{offer}\n"
     "If the user agrees to some or all of these add-ons ('yes', 'yes please', "

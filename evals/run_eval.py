@@ -24,6 +24,7 @@ from evals._data import cart_from, format_context, load_rows  # noqa: E402
 from evals.judges import (  # noqa: E402
     answer_faithfulness,
     clarification_correct,
+    escalation_correct,
     extraction_score,
     submission_correct,
 )
@@ -32,6 +33,7 @@ from src.app.graph.graph import build_graph  # noqa: E402
 from src.bootstrap import (  # noqa: E402
     build_catalog_repository,
     build_chat_model,
+    build_escalation_gateway,
     build_judge_model,
     build_supplier_gateway,
 )
@@ -62,7 +64,12 @@ def main() -> None:
     rows = load_rows()
     catalog = build_catalog_repository()
     agent = LangGraphOrderAgent(
-        build_graph(build_chat_model(), catalog, build_supplier_gateway())
+        build_graph(
+            build_chat_model(),
+            catalog,
+            build_supplier_gateway(),
+            escalation=build_escalation_gateway(),
+        )
     )
     judge = build_judge_model() if settings.openai_api_key else None
     if judge is None:
@@ -71,10 +78,11 @@ def main() -> None:
     extraction: list[float] = []
     clarification: list[bool] = []
     submission: list[bool] = []
+    escalation: list[bool] = []
     faithfulness: list[bool] = []
 
-    print(f"{'id':<22}{'extract':>8}{'clarify':>9}{'submit':>8}{'answer':>9}")
-    print("-" * 56)
+    print(f"{'id':<22}{'extract':>8}{'clarify':>9}{'submit':>8}{'escal':>7}{'answer':>9}")
+    print("-" * 63)
     for row in rows:
         before = cart_from(row.get("starting_cart"))
         # Optional per-row history lets a row exercise a multi-turn follow-up
@@ -91,9 +99,12 @@ def main() -> None:
         # Draft vs. place: only an explicit checkout should yield a supplier
         # confirmation; absent the key, the row expects a running draft (no submit).
         sub = submission_correct(expected.get("submitted", False), bool(result.confirmation))
+        # Escalation: a handoff ticket should appear exactly on the escalation rows.
+        esc = escalation_correct(expected.get("expects_escalation", False), bool(result.handoff))
         extraction.append(ext)
         clarification.append(clr)
         submission.append(sub)
+        escalation.append(esc)
 
         ans = "-"
         if result.answer and judge is not None:
@@ -109,19 +120,20 @@ def main() -> None:
 
         print(
             f"{row['id']:<22}{ext:>8.2f}{('ok' if clr else 'FAIL'):>9}"
-            f"{('ok' if sub else 'FAIL'):>8}{ans:>9}"
+            f"{('ok' if sub else 'FAIL'):>8}{('ok' if esc else 'FAIL'):>7}{ans:>9}"
         )
-        if ext < 1.0 or not clr or not sub:  # show what actually happened, to diagnose the miss
+        if ext < 1.0 or not clr or not sub or not esc:  # show what happened, to diagnose the miss
             pairs = sorted((li.sku, li.quantity) for li in result.draft_cart.all_lines())
             print(
                 f"    cart={pairs}  asked={result.clarifications}  "
-                f"submitted={bool(result.confirmation)}"
+                f"submitted={bool(result.confirmation)}  escalated={bool(result.handoff)}"
             )
 
-    print("-" * 56)
+    print("-" * 63)
     print(f"extraction correctness : {_mean(extraction):.0%}")
     print(f"clarification behavior : {_mean([float(c) for c in clarification]):.0%}")
     print(f"order submission       : {_mean([float(s) for s in submission]):.0%}")
+    print(f"escalation behavior    : {_mean([float(e) for e in escalation]):.0%}")
     if faithfulness:
         print(f"answer faithfulness    : {_mean([float(f) for f in faithfulness]):.0%}")
 

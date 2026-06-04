@@ -4,9 +4,9 @@ These assert each tool renders its port's data for the model and exposes the sch
 model binds against; the agentic loop that *calls* them is covered in test_qa_agent.
 """
 
-from src.app.graph.subgraphs.tools import build_order_desk_tools
+from src.app.graph.subgraphs.tools import build_escalation_tool, build_order_desk_tools
 from src.domain.models import ResolutionCandidate
-from test.fakes import FakeCatalog, FakeSupplier
+from test.fakes import FakeCatalog, FakeEscalation, FakeSupplier
 from test.fakes import catalog_item as _item
 
 
@@ -48,3 +48,13 @@ def test_get_price_renders_the_price_or_says_unpriced():
     priced = _tools(supplier=FakeSupplier(prices={"STRAW-WRAP": 16.60}))["get_price"]
     assert "16.60" in priced.invoke({"sku": "STRAW-WRAP"})
     assert "not priced" in _tools()["get_price"].invoke({"sku": "STRAW-WRAP"}).lower()
+
+
+def test_escalate_to_human_opens_a_handoff_ticket_and_renders_it():
+    # The escalation tool is built separately from the three read-only data tools
+    # (it's a write), so the read-only set above stays exactly three.
+    tool = build_escalation_tool(FakeEscalation())[0]
+    assert tool.name == "escalate_to_human"
+    assert tool.args_schema is not None
+    out = tool.invoke({"reason": "wants to return a case of limes"})
+    assert "TEST-HANDOFF" in out and "specialist" in out.lower()

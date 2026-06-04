@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage
 
 from src.app.graph.llm_nodes import IntentResult, ParsedOrder
 from src.domain.cart import Cart
-from src.domain.models import CatalogItem, InventoryStatus, OrderConfirmation
+from src.domain.models import CatalogItem, Handoff, InventoryStatus, OrderConfirmation
 from src.ports.order_agent import AgentResult
 
 SUPPLIER = "acme-foodservice"
@@ -103,6 +103,18 @@ class FakeSupplier:
         return OrderConfirmation(order_id="TEST-ORDER", supplier=self.supplier)
 
 
+class FakeEscalation:
+    """Fake escalation gateway: returns a deterministic handoff ticket, keyless."""
+
+    def create_handoff(self, reason, summary) -> Handoff:
+        return Handoff(
+            ticket_id="TEST-HANDOFF",
+            reason=reason,
+            callback_number="1-800-555-0000",
+            eta_minutes=15,
+        )
+
+
 class FakeOrderAgent:
     """Stub inner agent: returns a preset AgentResult and records each call as
     ``(message, cart, history)``; ``last_history`` reads the most recent one."""
@@ -115,10 +127,15 @@ class FakeOrderAgent:
     def last_history(self):
         return self.calls[-1][2] if self.calls else None
 
-    def run(self, message: str, cart: Cart, history=None, *, trace=None) -> AgentResult:
-        # trace is observability-only; the stub ignores it (records just the inputs).
+    def run(
+        self, message: str, cart: Cart, history=None, *, trace=None, thread_id="default"
+    ) -> AgentResult:
+        # trace/thread_id are observability/persistence-only; the stub records inputs.
         self.calls.append((message, cart, history))
         return self._result
+
+    def record_turn(self, message, reply, *, thread_id="default") -> None:
+        return  # no persistence in the stub; the checkpointer-backed agent implements it
 
 
 def catalog_item(sku, name, **kw) -> CatalogItem:

@@ -24,23 +24,138 @@ from src.domain.models import (  # noqa: E402
     ResolutionCandidate,
 )
 from src.ports.order_agent import AgentResult  # noqa: E402
-from test.fakes import FakeCatalog, FakeSupplier, ScriptedModel  # noqa: E402
+from test.fakes import FakeCatalog, FakeEscalation, FakeSupplier, ScriptedModel  # noqa: E402
 from test.fakes import catalog_item as _item  # noqa: E402
 
 S = "acme-foodservice"
 
 
-def _agent(intent, parsed=None, answer="", catalog=None, supplier=None, tool_steps=None):
+def _agent(intent, parsed=None, answer="", catalog=None, supplier=None, tool_steps=None,
+           escalation=None):
     graph = build_graph(
         ScriptedModel(intent, parsed, answer, tool_steps),
         catalog or FakeCatalog(),
         supplier or FakeSupplier(),
+        escalation=escalation,
     )
     return LangGraphOrderAgent(graph)
 
 
 def test_run_returns_an_agent_result():
     assert isinstance(_agent(Intent.ORDER).run("hi", Cart()), AgentResult)
+
+
+def test_a_checkpointer_persists_the_cart_across_turns_on_one_thread():
+    # With a checkpointer the running cart is restored from thread state: turn 2 omits
+    # the cart entirely, yet its add stacks onto turn 1's persisted line (it would be 2,
+    # not 4, if nothing had persisted). A second thread starts clean — state is isolated.
+    from langgraph.checkpoint.memory import MemorySaver
+
+    straw = _item("STRAW-WRAP", "Wrapped Straws", min_order=1)
+    catalog = FakeCatalog(
+        items_by_sku={"STRAW-WRAP": straw},
+        candidates_by_phrase={"wrapped straws": [ResolutionCandidate(item=straw, score=0.95)]},
+    )
+    graph = build_graph(
+        ScriptedModel(
+            Intent.ORDER, ParsedOrder(items=[ParsedItem(phrase="wrapped straws", quantity=2)])
+        ),
+        catalog,
+        FakeSupplier(),
+        checkpointer=MemorySaver(),
+    )
+    agent = LangGraphOrderAgent(graph)
+
+    first = agent.run("2 cases of wrapped straws", Cart(), thread_id="t1")
+    assert first.draft_cart.all_lines()[0].quantity == 2
+
+    second = agent.run("2 more cases of wrapped straws", thread_id="t1")  # cart omitted
+    assert second.draft_cart.all_lines()[0].quantity == 4  # restored, then stacked
+
+    other = agent.run("2 cases of wrapped straws", Cart(), thread_id="t2")
+    assert other.draft_cart.all_lines()[0].quantity == 2  # isolated per thread_id
+
+
+def test_a_prior_question_answer_does_not_leak_into_a_later_order_turn():
+    # Under a checkpointer, per-turn outputs persist; a question's `answer` must not
+    # survive into a later order turn (it used to surface as the order's reply).
+    from langgraph.checkpoint.memory import MemorySaver
+
+    straw = _item("STRAW-WRAP", "Wrapped Straws", min_order=1)
+    catalog = FakeCatalog(
+        items_by_sku={"STRAW-WRAP": straw},
+        candidates_by_phrase={"wrapped straws": [ResolutionCandidate(item=straw, score=0.95)]},
+    )
+    graph = build_graph(
+        ScriptedModel(
+            Intent.ORDER, ParsedOrder(items=[ParsedItem(phrase="wrapped straws", quantity=2)])
+        ),
+        catalog,
+        FakeSupplier(),
+        checkpointer=MemorySaver(),
+    )
+    agent = LangGraphOrderAgent(graph)
+
+    # Simulate a prior question turn having left an answer in this thread's state.
+    cfg = {"configurable": {"thread_id": "t1"}}
+    graph.update_state(cfg, {"answer": "We have 120 cases of DELI-32 on hand."})
+
+    result = agent.run("2 cases of wrapped straws", Cart(), thread_id="t1")
+    assert result.answer is None  # the order turn must not inherit the stale answer
+    assert [li.sku for li in result.draft_cart.all_lines()] == ["STRAW-WRAP"]
+
+
+def test_record_turn_persists_history_to_the_checkpointer():
+    # The UI doesn't thread history anymore — the agent records each turn into its own
+    # checkpointed state, so the next turn reads it back.
+    from langgraph.checkpoint.memory import MemorySaver
+
+    graph = build_graph(
+        ScriptedModel(Intent.ORDER), FakeCatalog(), FakeSupplier(), checkpointer=MemorySaver()
+    )
+    agent = LangGraphOrderAgent(graph)
+    agent.run("hi", Cart(), thread_id="t1")
+    agent.record_turn("hi", "hello there", thread_id="t1")
+    history = graph.get_state({"configurable": {"thread_id": "t1"}}).values["history"]
+    assert {"role": "user", "content": "hi"} in history
+    assert {"role": "assistant", "content": "hello there"} in history
+
+
+def test_record_turn_is_a_noop_without_a_checkpointer():
+    _agent(Intent.ORDER).record_turn("hi", "hello", thread_id="t1")  # must not raise
+
+
+def test_record_turn_redacts_pii_before_persisting_history():
+    from langgraph.checkpoint.memory import MemorySaver
+
+    graph = build_graph(
+        ScriptedModel(Intent.ORDER), FakeCatalog(), FakeSupplier(), checkpointer=MemorySaver()
+    )
+    agent = LangGraphOrderAgent(graph)
+    agent.record_turn("call me at 555-123-4567", "sure", thread_id="t1")
+    history = graph.get_state({"configurable": {"thread_id": "t1"}}).values["history"]
+    user_msg = next(h["content"] for h in history if h["role"] == "user")
+    assert "555-123-4567" not in user_msg  # raw PII never lands in persisted history
+
+
+def test_stream_run_emits_progress_events_then_a_final_result():
+    straw = _item("STRAW-WRAP", "Wrapped Straws", min_order=1)
+    catalog = FakeCatalog(
+        items_by_sku={"STRAW-WRAP": straw},
+        candidates_by_phrase={"wrapped straws": [ResolutionCandidate(item=straw, score=0.95)]},
+    )
+    agent = _agent(
+        Intent.ORDER,
+        parsed=ParsedOrder(items=[ParsedItem(phrase="wrapped straws", quantity=2)]),
+        catalog=catalog,
+    )
+    events = list(agent.stream_run("2 cases of wrapped straws", Cart()))
+    kinds = [kind for kind, _ in events]
+    assert kinds[-1] == "result"  # the stream always ends with the finished turn
+    progressed = {payload for kind, payload in events if kind == "progress"}
+    assert {"redact", "intent", "parse", "apply"} <= progressed  # real graph nodes, as they run
+    result = events[-1][1]
+    assert [li.sku for li in result.draft_cart.all_lines()] == ["STRAW-WRAP"]
 
 
 def test_clean_order_drafts_with_items_and_no_clarification():
@@ -187,6 +302,19 @@ def test_question_path_runs_a_tool_call_loop_then_answers():
     result = agent.run("how many 16oz deli per case?", cart)
     assert result.answer == "The 16oz deli container comes 500 per case."
     assert result.draft_cart == cart  # question path leaves the cart intact
+
+
+# --- escalation: hand off to a human ------------------------------------------
+def test_explicit_escalation_hands_off_to_a_human_and_leaves_the_cart_untouched():
+    # An ESCALATE-classified turn opens a handoff ticket and ends — no order edit.
+    line = LineItem(sku="DELI-16", product_name="16oz Deli Container", supplier=S, quantity=2)
+    cart = Cart(by_supplier={S: [line]})
+    agent = _agent(Intent.ESCALATE, escalation=FakeEscalation())
+    result = agent.run("I need to dispute an invoice — can I talk to a person?", cart)
+    assert result.handoff is not None
+    assert result.handoff.ticket_id == "TEST-HANDOFF"
+    assert result.draft_cart == cart  # escalation never touches the order
+    assert result.clarifications == []  # it hands off rather than asking the desk's questions
 
 
 # --- companion add-on flow: accept a pending offer, add it by SKU --------------

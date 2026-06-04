@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.ports import CatalogRepository, SupplierGateway
+from src.ports import CatalogRepository, EscalationGateway, SupplierGateway
 
 
 class _SearchCatalogArgs(BaseModel):
@@ -30,6 +30,15 @@ class _SearchCatalogArgs(BaseModel):
 
 class _SkuArgs(BaseModel):
     sku: str = Field(description="The exact catalog SKU, e.g. 'DELI-16'.")
+
+
+class _EscalateArgs(BaseModel):
+    reason: str = Field(
+        description=(
+            "A brief reason the question needs a human — what the customer asked that "
+            "the read-only lookups can't answer (e.g. 'wants to return a case')."
+        )
+    )
 
 
 def build_order_desk_tools(catalog: CatalogRepository, supplier: SupplierGateway):
@@ -88,4 +97,39 @@ def build_order_desk_tools(catalog: CatalogRepository, supplier: SupplierGateway
             ),
             args_schema=_SkuArgs,
         ),
+    ]
+
+
+def build_escalation_tool(escalation: EscalationGateway):
+    """Build the model-callable handoff tool, bound to the escalation gateway.
+
+    Kept separate from the read-only data tools: it's a *write* (it opens a support
+    ticket), and it's only added to the QA agent's toolset when an escalation gateway
+    is wired, so the read-only tool set stays exactly three. The model calls this when
+    its lookups can't answer — turning the old "I don't have that information" dead-end
+    into a real human handoff. Returns text (the ticket) the model relays to the user.
+    """
+    from langchain_core.tools import StructuredTool
+
+    def escalate_to_human(reason: str) -> str:
+        """Hand the conversation off to a human specialist when the tools can't help."""
+        handoff = escalation.create_handoff(reason=reason, summary=reason)
+        return (
+            f"Escalation opened. Give the customer their reference, ticket {handoff.ticket_id}, "
+            f"and tell them a specialist will follow up within about {handoff.eta_minutes} "
+            f"minutes and that they can reach our team directly at {handoff.callback_number}."
+        )
+
+    return [
+        StructuredTool.from_function(
+            func=escalate_to_human,
+            name="escalate_to_human",
+            description=(
+                "Hand the conversation off to a human specialist. Call this when the "
+                "customer's request is outside product stock/pricing (returns, billing, "
+                "account changes, complaints) or the catalog and tools simply can't answer "
+                "it — instead of guessing or saying you don't know."
+            ),
+            args_schema=_EscalateArgs,
+        )
     ]

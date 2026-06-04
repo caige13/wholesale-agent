@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -32,6 +32,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 class QAState(TypedDict, total=False):
     clean_message: str  # shared IN with OrderState — the redacted question
+    history: list[dict]  # shared IN with OrderState — recent turns for follow-up context
     messages: Annotated[list, add_messages]  # private to the loop (chat history)
     answer: str  # shared OUT with OrderState — the final text answer
 
@@ -43,7 +44,10 @@ _SYSTEM_PROMPT = SystemMessage(
     "- Use search_catalog to find a product and its SKU from a description.\n"
     "- Use check_inventory for live stock and get_price for the per-case price "
     "(neither lives in the catalog).\n"
-    "Be concise. If the tools don't cover the question, say you don't have that information."
+    "If the question is outside product stock/pricing (returns, billing, account changes, "
+    "complaints) or the catalog and tools simply can't answer it, call escalate_to_human "
+    "with a brief reason instead of guessing — then give the customer the ticket reference "
+    "from the tool result so they can track it. Be concise."
 )
 
 
@@ -52,7 +56,14 @@ def build_qa_agent(model, tools):
     bound = model.bind_tools(tools)
 
     def seed(state: QAState) -> dict:
-        return {"messages": [HumanMessage(state["clean_message"])]}
+        # Seed the loop with the recent conversation so a follow-up ("16") resolves
+        # against the prior question, then the current message.
+        prior = [
+            AIMessage(turn.get("content", "")) if turn.get("role") == "assistant"
+            else HumanMessage(turn.get("content", ""))
+            for turn in (state.get("history") or [])[-6:]
+        ]
+        return {"messages": [*prior, HumanMessage(state["clean_message"])]}
 
     def assistant(state: QAState) -> dict:
         return {"messages": [bound.invoke([_SYSTEM_PROMPT, *state["messages"]])]}

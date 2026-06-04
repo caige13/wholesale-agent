@@ -19,6 +19,7 @@ pytest.importorskip("langgraph")
 from src.app.graph.agent import LangGraphOrderAgent  # noqa: E402
 from src.app.graph.graph import build_graph  # noqa: E402
 from src.app.graph.llm_nodes import ParsedItem, ParsedOrder  # noqa: E402
+from src.app.turn import stream_turn  # noqa: E402
 from src.domain.cart import Cart  # noqa: E402
 from src.domain.models import Intent, ResolutionCandidate  # noqa: E402
 from src.interfaces.gradio_app import render_cart, run_turn  # noqa: E402
@@ -96,3 +97,17 @@ def test_an_ambiguous_order_surfaces_a_clarifying_question_in_chat():
     assert history[-1]["role"] == "assistant"
     assert history[-1]["content"].strip()  # a question surfaced, not a blank bubble
     assert "Awaiting Order" in render_cart(cart)  # nothing resolved onto the slip
+
+
+def test_stream_turn_streams_progress_frames_then_a_final_reply():
+    # The streaming seam yields live progress, then the composed reply on the final
+    # frame with the new cart to commit — what the Gradio callback renders.
+    parsed = ParsedOrder(items=[ParsedItem(phrase="16oz deli", quantity=3)])
+    agent = _agent(Intent.ORDER, parsed=parsed, catalog=_deli_catalog())
+
+    frames = list(stream_turn("3 cases of 16oz deli", Cart(), agent))
+
+    assert any(f.phase == "progress" for f in frames)  # real progress, not a post-hoc typewriter
+    assert frames[-1].done and frames[-1].phase == "final"
+    assert "16oz Deli Container" in frames[-1].reply  # final composed reply
+    assert not frames[-1].cart.is_empty()  # cart committed on the final frame

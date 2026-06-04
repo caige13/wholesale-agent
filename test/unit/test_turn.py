@@ -9,7 +9,7 @@ on a question turn (spec §11). The inner agent is stubbed; its contract
 
 from src.app.turn import TurnResult, handle_turn
 from src.domain.cart import Cart
-from src.domain.models import LineItem, OrderConfirmation
+from src.domain.models import Handoff, LineItem, OrderConfirmation
 from src.ports.order_agent import AgentResult
 from test.fakes import FakeOrderAgent
 
@@ -109,6 +109,16 @@ def test_invites_checkout_on_an_unplaced_draft():
     result = handle_turn("add deli", Cart(), agent)
     assert "place the order" in result.reply
     assert "Order confirmed" not in result.reply
+
+
+def test_renders_a_human_handoff_with_its_ticket_reference_deterministically():
+    # The intent-path handoff is composed by us, not the LLM, so the ticket + callback
+    # are always present (the bug was the QA model paraphrasing and dropping the ticket).
+    handoff = Handoff(ticket_id="SUP-AB12CD", reason="x", callback_number="1-800-555-0000")
+    agent = FakeOrderAgent(AgentResult(draft_cart=Cart(), handoff=handoff))
+    result = handle_turn("get me a person", Cart(), agent)
+    assert "SUP-AB12CD" in result.reply
+    assert "1-800-555-0000" in result.reply
 
 
 def test_shows_the_confirmation_when_the_order_is_placed():
