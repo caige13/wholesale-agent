@@ -39,7 +39,9 @@ def render_cart(cart: Cart) -> str:
 
 def _slip_header_html(cart: Cart) -> str:
     lines, suppliers = cart.all_lines(), cart.by_supplier
-    meta = f"{len(lines)} line{_s(lines)} · {len(suppliers)} supplier{_s(suppliers)}"
+    line_count = f"{len(lines)} line{_plural_suffix(lines)}"
+    supplier_count = f"{len(suppliers)} supplier{_plural_suffix(suppliers)}"
+    meta = f"{line_count} · {supplier_count}"
     return (
         '<div class="slip__head">'
         '<span class="slip__title">Packing Slip</span>'
@@ -84,9 +86,9 @@ def _line_text_html(item: LineItem) -> str:
     so the interactive panel can render this beside its stepper."""
     label = html.escape(item.product_name or item.sku or "item")
 
-    sub_bits = [b for b in (item.sku, item.unit) if b]
-    sub = html.escape(" · ".join(sub_bits))
-    sub_html = f'<div class="ln__sub">{sub}</div>' if sub else ""
+    subtitle_parts = [b for b in (item.sku, item.unit) if b]
+    subtitle_text = html.escape(" · ".join(subtitle_parts))
+    sub_html = f'<div class="ln__sub">{subtitle_text}</div>' if subtitle_text else ""
 
     flags_html = ""
     if item.flags:
@@ -124,7 +126,7 @@ def _subtotal(lines: list[LineItem]) -> str:
     return f"${sum(priced):.2f}" if priced else "—"
 
 
-def _s(seq) -> str:
+def _plural_suffix(seq) -> str:
     return "" if len(seq) == 1 else "s"
 
 

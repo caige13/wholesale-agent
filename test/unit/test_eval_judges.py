@@ -17,7 +17,7 @@ from evals.judges import (
 from src.domain.cart import Cart
 from src.domain.models import LineItem
 
-S = "acme-foodservice"
+SUPPLIER = "acme-foodservice"
 
 
 class FakeJudge:
@@ -31,8 +31,8 @@ class FakeJudge:
 
 
 def _cart(*pairs) -> Cart:
-    lines = [LineItem(sku=sku, supplier=S, quantity=qty) for sku, qty in pairs]
-    return Cart(by_supplier={S: lines}) if lines else Cart()
+    lines = [LineItem(sku=sku, supplier=SUPPLIER, quantity=qty) for sku, qty in pairs]
+    return Cart(by_supplier={SUPPLIER: lines}) if lines else Cart()
 
 
 def test_extraction_scores_one_for_an_exact_match():

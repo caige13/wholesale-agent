@@ -54,7 +54,7 @@ def resolve_skus(
         return _resolved(item, sized, ALIAS_CONFIDENCE)
 
     # 3. A clearly-best candidate: strong enough and well ahead of the runner-up.
-    ranked = sorted(candidates, key=lambda c: c.score, reverse=True)
+    ranked = sorted(candidates, key=lambda candidate: candidate.score, reverse=True)
     top = ranked[0]
     runner_up = ranked[1].score if len(ranked) > 1 else 0.0
     if top.score >= MIN_SCORE and (top.score - runner_up) >= MARGIN:
@@ -62,7 +62,7 @@ def resolve_skus(
 
     # 4. Too close or too weak → unresolved, low confidence (the gate will clarify),
     #    carrying the close candidates so the clarifying question can offer them.
-    options = [c.item.product_name for c in ranked[:3]]
+    options = [candidate.item.product_name for candidate in ranked[:3]]
     return item.model_copy(
         update={"sku": None, "confidence": AMBIGUOUS_CONFIDENCE, "options": options}
     )
@@ -81,7 +81,7 @@ def _resolved(item: LineItem, catalog_item: CatalogItem, confidence: float) -> L
 
 
 def _candidate_for_sku(candidates: list[ResolutionCandidate], sku: str) -> CatalogItem | None:
-    return next((c.item for c in candidates if c.item.sku == sku), None)
+    return next((candidate.item for candidate in candidates if candidate.item.sku == sku), None)
 
 
 def _size_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogItem | None:
@@ -97,14 +97,14 @@ def _size_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogIt
     wrong family. None too when the phrase names no size ("deli containers").
     """
     tokens = phrase.split()
-    sized = [c for c in candidates if c.item.unit_size.lower() in tokens]
+    sized = [candidate for candidate in candidates if candidate.item.unit_size.lower() in tokens]
     if not sized:
         return None
     descriptors = {t for t in tokens if not _is_size_like(t)}
-    consistent = [c for c in sized if _name_tokens(c.item) & descriptors]
+    consistent = [candidate for candidate in sized if _name_tokens(candidate.item) & descriptors]
     if not consistent:
         return None
-    return max(consistent, key=lambda c: c.score).item
+    return max(consistent, key=lambda candidate: candidate.score).item
 
 
 def _is_size_like(token: str) -> bool:
@@ -129,8 +129,8 @@ def _exact_match(candidates: list[ResolutionCandidate], phrase: str) -> CatalogI
     disambiguates same-family items the embedding scores cluster together. Bare
     "deli containers" still matches no specific alias, so it stays ambiguous.
     """
-    for c in candidates:
-        names = [c.item.product_name.lower(), *(a.lower() for a in c.item.aliases)]
+    for candidate in candidates:
+        names = [candidate.item.product_name.lower(), *(a.lower() for a in candidate.item.aliases)]
         if any(name in phrase for name in names):
-            return c.item
+            return candidate.item
     return None

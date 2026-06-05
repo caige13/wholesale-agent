@@ -1,7 +1,8 @@
 """JSON-backed catalog repository — loads the static product catalog from disk.
 
 Implements the ``get``/``all`` half of ``CatalogRepository``. Semantic
-``find_candidates`` is deferred to the RAG slice, where a FAISS-backed adapter
+``find_candidates`` is implemented by ``FaissCatalogRepository``
+(``src/adapters/faiss_catalog_repository.py``), a FAISS-backed adapter that
 embeds ``product_name + aliases + category`` and returns scored
 ``ResolutionCandidate``s (LangChain ``Document`` → domain object, the
 anti-corruption boundary).

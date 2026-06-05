@@ -2,8 +2,9 @@
 
 Defined outside-in: ``handle_turn`` needs *something* that takes a turn's
 message plus the running cart and returns the turn's structured result. That
-"something" is the LangGraph agent (deferred); this Protocol is its contract, so
-the handler can be built and tested against a stub today.
+"something" is the LangGraph agent, implemented in ``src/app/graph/agent.py``
+(``LangGraphOrderAgent``); this Protocol is its contract, so the handler can be
+built and tested against a stub today.
 """
 
 from __future__ import annotations

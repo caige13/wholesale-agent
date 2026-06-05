@@ -27,7 +27,7 @@ from src.ports.order_agent import AgentResult  # noqa: E402
 from test.fakes import FakeCatalog, FakeEscalation, FakeSupplier, ScriptedModel  # noqa: E402
 from test.fakes import catalog_item as _item  # noqa: E402
 
-S = "acme-foodservice"
+SUPPLIER = "acme-foodservice"
 
 
 def _agent(intent, parsed=None, answer="", catalog=None, supplier=None, tool_steps=None,
@@ -97,8 +97,8 @@ def test_a_prior_question_answer_does_not_leak_into_a_later_order_turn():
     agent = LangGraphOrderAgent(graph)
 
     # Simulate a prior question turn having left an answer in this thread's state.
-    cfg = {"configurable": {"thread_id": "t1"}}
-    graph.update_state(cfg, {"answer": "We have 120 cases of DELI-32 on hand."})
+    graph_config = {"configurable": {"thread_id": "t1"}}
+    graph.update_state(graph_config, {"answer": "We have 120 cases of DELI-32 on hand."})
 
     result = agent.run("2 cases of wrapped straws", Cart(), thread_id="t1")
     assert result.answer is None  # the order turn must not inherit the stale answer
@@ -221,21 +221,23 @@ def test_placing_the_order_fills_unit_price_and_confirms():
 
 
 def test_placing_the_order_with_no_new_items_submits_the_existing_cart():
-    existing = LineItem(sku="STRAW-WRAP", product_name="Wrapped Straws", supplier=S, quantity=2)
-    cart = Cart(by_supplier={S: [existing]})
+    existing = LineItem(
+        sku="STRAW-WRAP", product_name="Wrapped Straws", supplier=SUPPLIER, quantity=2
+    )
+    cart = Cart(by_supplier={SUPPLIER: [existing]})
     result = _agent(Intent.ORDER, parsed=ParsedOrder(place_order=True)).run("place the order", cart)
     assert result.confirmation is not None  # the running draft is submitted on checkout
     assert [li.sku for li in result.draft_cart.all_lines()] == ["STRAW-WRAP"]  # unchanged
 
 
 def test_ambiguous_order_asks_for_clarification():
-    d8 = _item("DELI-08", "8oz Deli Container")
-    d16 = _item("DELI-16", "16oz Deli Container")
+    deli_8oz = _item("DELI-08", "8oz Deli Container")
+    deli_16oz = _item("DELI-16", "16oz Deli Container")
     catalog = FakeCatalog(
         candidates_by_phrase={
             "deli containers": [
-                ResolutionCandidate(item=d8, score=0.84),
-                ResolutionCandidate(item=d16, score=0.82),
+                ResolutionCandidate(item=deli_8oz, score=0.84),
+                ResolutionCandidate(item=deli_16oz, score=0.82),
             ]
         },
     )
@@ -253,10 +255,12 @@ def test_set_quantity_updates_an_existing_cart_line_in_place():
     parsed = ParsedOrder(
         items=[ParsedItem(phrase="16oz deli", quantity=3, action=CartOpKind.SET_QUANTITY)]
     )
-    existing = LineItem(sku="DELI-16", product_name="16oz Deli Container", supplier=S, quantity=2)
-    cart = Cart(by_supplier={S: [existing]})
+    existing = LineItem(
+        sku="DELI-16", product_name="16oz Deli Container", supplier=SUPPLIER, quantity=2
+    )
+    cart = Cart(by_supplier={SUPPLIER: [existing]})
     result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("make it 3", cart)
-    lines = result.draft_cart.by_supplier[S]
+    lines = result.draft_cart.by_supplier[SUPPLIER]
     assert len(lines) == 1  # replaced, not duplicated
     assert lines[0].quantity == 3
 
@@ -268,15 +272,15 @@ def test_remove_drops_an_existing_cart_line():
         candidates_by_phrase={"limes": [ResolutionCandidate(item=lime, score=0.95)]},
     )
     parsed = ParsedOrder(items=[ParsedItem(phrase="limes", action=CartOpKind.REMOVE)])
-    existing = LineItem(sku="LIME-FRESH", product_name="Fresh Limes", supplier=S, quantity=1)
-    cart = Cart(by_supplier={S: [existing]})
+    existing = LineItem(sku="LIME-FRESH", product_name="Fresh Limes", supplier=SUPPLIER, quantity=1)
+    cart = Cart(by_supplier={SUPPLIER: [existing]})
     result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("drop the limes", cart)
     assert result.draft_cart.is_empty()
 
 
 def test_question_returns_answer_and_leaves_the_cart_unchanged():
     line = LineItem(sku="DELI-16", product_name="16oz Deli Container", quantity=2)
-    cart = Cart(by_supplier={S: [line]})
+    cart = Cart(by_supplier={SUPPLIER: [line]})
     agent = _agent(Intent.QUESTION, answer="Each case has 500 units.")
     result = agent.run("how many per case?", cart)
     assert result.answer == "Each case has 500 units."
@@ -298,7 +302,9 @@ def test_question_path_runs_a_tool_call_loop_then_answers():
             "The 16oz deli container comes 500 per case.",
         ],
     )
-    cart = Cart(by_supplier={S: [LineItem(sku="DELI-16", product_name="16oz Deli", quantity=2)]})
+    cart = Cart(by_supplier={
+        SUPPLIER: [LineItem(sku="DELI-16", product_name="16oz Deli", quantity=2)]
+    })
     result = agent.run("how many 16oz deli per case?", cart)
     assert result.answer == "The 16oz deli container comes 500 per case."
     assert result.draft_cart == cart  # question path leaves the cart intact
@@ -307,8 +313,10 @@ def test_question_path_runs_a_tool_call_loop_then_answers():
 # --- escalation: hand off to a human ------------------------------------------
 def test_explicit_escalation_hands_off_to_a_human_and_leaves_the_cart_untouched():
     # An ESCALATE-classified turn opens a handoff ticket and ends — no order edit.
-    line = LineItem(sku="DELI-16", product_name="16oz Deli Container", supplier=S, quantity=2)
-    cart = Cart(by_supplier={S: [line]})
+    line = LineItem(
+        sku="DELI-16", product_name="16oz Deli Container", supplier=SUPPLIER, quantity=2
+    )
+    cart = Cart(by_supplier={SUPPLIER: [line]})
     agent = _agent(Intent.ESCALATE, escalation=FakeEscalation())
     result = agent.run("I need to dispute an invoice — can I talk to a person?", cart)
     assert result.handoff is not None
@@ -321,31 +329,31 @@ def test_explicit_escalation_hands_off_to_a_human_and_leaves_the_cart_untouched(
 def _deli32():
     return CatalogItem(
         sku="DELI-32", product_name="32oz Deli Container", category="containers",
-        unit_size="32oz", case_pack=480, supplier=S, companion_skus=["LID-DELI"],
+        unit_size="32oz", case_pack=480, supplier=SUPPLIER, companion_skus=["LID-DELI"],
     )
 
 
 def _lid_deli():
     return CatalogItem(
         sku="LID-DELI", product_name="Deli Container Lid", category="lids",
-        unit_size="fits 8-32oz", case_pack=500, supplier=S,
+        unit_size="fits 8-32oz", case_pack=500, supplier=SUPPLIER,
     )
 
 
 def _deli16():
     return CatalogItem(
         sku="DELI-16", product_name="16oz Deli Container", category="containers",
-        unit_size="16oz", case_pack=500, supplier=S, companion_skus=["LID-DELI"],
+        unit_size="16oz", case_pack=500, supplier=SUPPLIER, companion_skus=["LID-DELI"],
     )
 
 
 def _cart_with_pending_lid(quantity=3):
     parent = LineItem(
-        sku="DELI-32", product_name="32oz Deli Container", supplier=S, quantity=quantity,
+        sku="DELI-32", product_name="32oz Deli Container", supplier=SUPPLIER, quantity=quantity,
         flags=[Flag.NEEDS_COMPANION],
         companions=[Companion(sku="LID-DELI", product_name="Deli Container Lid")],
     )
-    return Cart(by_supplier={S: [parent]})
+    return Cart(by_supplier={SUPPLIER: [parent]})
 
 
 def test_accepting_a_companion_offer_adds_it_by_sku_and_drafts():
@@ -409,9 +417,9 @@ def test_adding_a_second_deli_size_re_offers_and_tops_up_the_shared_lid():
         candidates_by_phrase={"16oz deli": [ResolutionCandidate(item=_deli16(), score=0.95)]},
     )
     # Cart already covers 3× 32oz deli (1440 units) with exactly 3 lid cases.
-    cart = Cart(by_supplier={S: [
-        LineItem(sku="DELI-32", product_name="32oz Deli Container", supplier=S, quantity=3),
-        LineItem(sku="LID-DELI", product_name="Deli Container Lid", supplier=S, quantity=3),
+    cart = Cart(by_supplier={SUPPLIER: [
+        LineItem(sku="DELI-32", product_name="32oz Deli Container", supplier=SUPPLIER, quantity=3),
+        LineItem(sku="LID-DELI", product_name="Deli Container Lid", supplier=SUPPLIER, quantity=3),
     ]})
     # Turn 1: add 2× 16oz deli → 2440 units now need 5 lid cases, only 3 present → re-offer.
     add = ParsedOrder(items=[ParsedItem(phrase="16oz deli", quantity=2)])

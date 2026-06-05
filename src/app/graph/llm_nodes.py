@@ -91,8 +91,10 @@ _PARSE_INSTRUCTIONS = (
     "correcting obvious spelling/spacing typos to the catalog's standard wording "
     "(e.g. '16 ounze deli ocntainers' → '16oz deli container') — but do NOT add "
     "detail the user didn't give (if they didn't state a size, don't invent one). "
-    "Also give either the number of cases (quantity) or a raw unit count "
-    "(unit_quantity) if ordered in units.\n"
+    "Give the count as `quantity` (number of cases) for an ordinary count — '3 cases', "
+    "'3 orders', '3 boxes', or a bare number ('3 of the napkins'). Use `unit_quantity` "
+    "ONLY when the user counts individual pieces explicitly ('1200 containers', '500 "
+    "napkins'); the system rounds those up into whole cases.\n"
     "Choose an action per item:\n"
     "- 'add' for a new item or more of something.\n"
     "- 'set_quantity' when the item is ALREADY in the current cart and the user "
@@ -119,7 +121,13 @@ _PARSE_INSTRUCTIONS = (
     "the order submitted ('that's it', 'place the order', 'I'm done', 'submit it', "
     "'check out'). Accepting an add-on offer ('yes please') is NOT placing the order. "
     "Adding/removing/changing items keeps place_order false unless they also say "
-    "they're done (e.g. 'add napkins and that's it' → add napkins AND place_order=true)."
+    "they're done (e.g. 'add napkins and that's it' → add napkins AND place_order=true). "
+    "Also set place_order to true when the user's whole message is a bare affirmation "
+    "('yes', 'yep', 'sure', 'go ahead', 'do it'), there is NO pending add-on offer above, "
+    "and the assistant's most recent turn asked whether to place or submit the order (e.g. "
+    "'Anything else, or should I place the order?') — a 'yes' there means submit, with no "
+    "new items. When a pending add-on offer IS listed above, a bare 'yes' instead accepts "
+    "the add-on (see accepted_companions), not the order."
     "\n\nCurrent cart:\n{cart}\n\nMessage:\n{message}"
 )
 # --- Nodes (graph order: intent -> parse; the question branch is a subgraph) -
@@ -146,7 +154,10 @@ def parse_node(state: dict, model: BaseChatModel, catalog: CatalogRepository) ->
         )
         for item in parsed.items
     ]
-    accepted = [{"name": a.name, "quantity": a.quantity} for a in parsed.accepted_companions]
+    accepted = [
+        {"name": companion.name, "quantity": companion.quantity}
+        for companion in parsed.accepted_companions
+    ]
     return {
         "cart_ops": cart_ops,
         "accepted_companions": accepted,

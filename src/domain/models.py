@@ -4,10 +4,8 @@ These are the types every layer speaks. Keeping this module dependency-light
 means it imports anywhere without pulling in a tower of SDKs, and lets the
 deterministic core be tested with plain object construction.
 
-Only the catalog/RAG types live here so far. The order-pipeline types
-(``LineItem``, ``CartOp``, supplier results, ``OrderState`` …) are reintroduced
-test-first as we build outward from the UX — see ``_deferred.py`` for the
-preserved design.
+Both the catalog/RAG types and the order-pipeline types (``LineItem``,
+``CartOp``, supplier results, order status …) are fully implemented below.
 """
 
 from __future__ import annotations
@@ -88,8 +86,8 @@ class LineItem(BaseModel):
 
     Fields fill in as the line moves through the pipeline: display fields from
     parsing/resolution, ``confidence`` from resolution (drives the gate), and
-    ``flags`` from validation / inventory. ``unit_quantity`` returns with
-    validate_rules — see ``_deferred.py``.
+    ``flags`` from validation / inventory. ``unit_quantity`` is consumed by
+    validate_rules — see ``src/domain/rules.py``.
     """
 
     raw_text: str = ""  # the phrase parsed from the message; resolve_skus matches on it

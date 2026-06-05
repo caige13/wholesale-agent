@@ -26,7 +26,7 @@ from src.interfaces.gradio_app import render_cart, run_turn  # noqa: E402
 from test.fakes import FakeCatalog, FakeSupplier, ScriptedModel  # noqa: E402
 from test.fakes import catalog_item as _item  # noqa: E402
 
-S = "acme-foodservice"
+SUPPLIER = "acme-foodservice"
 
 
 def _agent(intent, parsed=None, answer="", catalog=None, supplier=None):
@@ -54,7 +54,7 @@ def test_an_order_turn_puts_the_resolved_line_on_the_slip():
 
     slip = render_cart(cart)
     assert "16oz Deli Container" in slip
-    assert S in slip  # grouped under its supplier
+    assert SUPPLIER in slip  # grouped under its supplier
     assert history[0] == {"role": "user", "content": "3 cases of 16oz deli"}
     assert history[-1]["role"] == "assistant"
 
@@ -79,13 +79,13 @@ def test_an_interleaved_question_answers_without_blanking_the_slip():
 
 
 def test_an_ambiguous_order_surfaces_a_clarifying_question_in_chat():
-    d8 = _item("DELI-08", "8oz Deli Container")
-    d16 = _item("DELI-16", "16oz Deli Container")
+    deli_8oz = _item("DELI-08", "8oz Deli Container")
+    deli_16oz = _item("DELI-16", "16oz Deli Container")
     catalog = FakeCatalog(
         candidates_by_phrase={
             "deli": [
-                ResolutionCandidate(item=d8, score=0.84),
-                ResolutionCandidate(item=d16, score=0.82),
+                ResolutionCandidate(item=deli_8oz, score=0.84),
+                ResolutionCandidate(item=deli_16oz, score=0.82),
             ]
         },
     )

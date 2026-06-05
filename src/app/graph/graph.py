@@ -63,8 +63,10 @@ def build_graph(
     ``escalation`` (the human-handoff gateway) enables the ESCALATE branch and adds the
     model-callable ``escalate_to_human`` tool to the question path; tests that don't
     exercise escalation may omit it. ``checkpointer`` (e.g. a ``MemorySaver``) persists
-    ``OrderState`` per ``thread_id`` across turns — omitted, the graph is single-turn and
-    the caller threads the cart/history explicitly (the keyless suite's default).
+    ``OrderState`` per ``thread_id`` across turns: production always wires one, and it
+    OWNS the conversation history — the agent records each turn into it, so the UI threads
+    only the cart, not history. Tests omit it and run single-turn, seeding any cart/history
+    explicitly per call (the keyless suite's default).
     """
     builder = StateGraph(OrderState)
 

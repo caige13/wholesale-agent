@@ -94,17 +94,21 @@ def main() -> None:
         result = agent.run(row["input_message"], before, row.get("history"), trace=trace)
         expected = row["expected"]
 
-        ext = extraction_score(expected, result.draft_cart, before)
-        clr = clarification_correct(expected["expects_clarification"], bool(result.clarifications))
+        row_extraction = extraction_score(expected, result.draft_cart, before)
+        row_clarify = clarification_correct(
+            expected["expects_clarification"], bool(result.clarifications)
+        )
         # Draft vs. place: only an explicit checkout should yield a supplier
         # confirmation; absent the key, the row expects a running draft (no submit).
-        sub = submission_correct(expected.get("submitted", False), bool(result.confirmation))
+        row_submit = submission_correct(expected.get("submitted", False), bool(result.confirmation))
         # Escalation: a handoff ticket should appear exactly on the escalation rows.
-        esc = escalation_correct(expected.get("expects_escalation", False), bool(result.handoff))
-        extraction.append(ext)
-        clarification.append(clr)
-        submission.append(sub)
-        escalation.append(esc)
+        row_escalate = escalation_correct(
+            expected.get("expects_escalation", False), bool(result.handoff)
+        )
+        extraction.append(row_extraction)
+        clarification.append(row_clarify)
+        submission.append(row_submit)
+        escalation.append(row_escalate)
 
         ans = "-"
         if result.answer and judge is not None:
@@ -119,10 +123,12 @@ def main() -> None:
                 _log.warning("answer judge unavailable: %s — skipping it", type(exc).__name__)
 
         print(
-            f"{row['id']:<22}{ext:>8.2f}{('ok' if clr else 'FAIL'):>9}"
-            f"{('ok' if sub else 'FAIL'):>8}{('ok' if esc else 'FAIL'):>7}{ans:>9}"
+            f"{row['id']:<22}{row_extraction:>8.2f}{('ok' if row_clarify else 'FAIL'):>9}"
+            f"{('ok' if row_submit else 'FAIL'):>8}{('ok' if row_escalate else 'FAIL'):>7}{ans:>9}"
         )
-        if ext < 1.0 or not clr or not sub or not esc:  # show what happened, to diagnose the miss
+        if (
+            row_extraction < 1.0 or not row_clarify or not row_submit or not row_escalate
+        ):  # show what happened, to diagnose the miss
             pairs = sorted((li.sku, li.quantity) for li in result.draft_cart.all_lines())
             print(
                 f"    cart={pairs}  asked={result.clarifications}  "
