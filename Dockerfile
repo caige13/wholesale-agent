@@ -10,9 +10,11 @@
 #
 # Python 3.13 matches CI and the uv.lock resolution.
 #
-# Note: on Linux the pinned torch is the CUDA build, so this image is large
-# (several GB of nvidia-* wheels) even though only the CPU is used. That's the
-# lockfile's resolution, kept verbatim so this tests exactly what ships.
+# torch is pinned to the CPU build in the lock (see pyproject's pytorch-cpu
+# index), so this installs torch==…+cpu and none of the CUDA/nvidia wheels —
+# a small image that still tests exactly what the lockfile ships. The pinned
+# requirements carry the PyTorch CPU index URL, so the plain pip install resolves
+# the +cpu wheel with no extra flags.
 FROM python:3.13-slim
 
 # OpenMP runtime — imported at runtime by faiss-cpu / scikit-learn / torch.

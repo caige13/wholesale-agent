@@ -37,6 +37,15 @@ eval-langsmith:
 
 # Regenerate the pinned requirements*.txt from uv.lock so the pip path (run.py)
 # never drifts from the lockfile. Run this after changing dependencies.
+#
+# The CPU torch wheels (torch==…+cpu on Linux) live on PyTorch's CPU index, not
+# PyPI, and `uv export` can't emit a package-scoped index into pip's flat format —
+# so prepend the index URL to both files, leaving them installable with a plain
+# `pip install -r requirements.txt`.
+PYTORCH_CPU_INDEX = https://download.pytorch.org/whl/cpu
 requirements:
 	uv export --no-hashes --no-emit-project --no-dev --extra agent -o requirements.txt
 	uv export --no-hashes --no-emit-project --extra agent -o requirements-dev.txt
+	@for f in requirements.txt requirements-dev.txt; do \
+		printf -- '--extra-index-url $(PYTORCH_CPU_INDEX)\n' | cat - $$f > $$f.tmp && mv $$f.tmp $$f; \
+	done

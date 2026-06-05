@@ -26,6 +26,9 @@ agent = [
     "langchain-huggingface>=0.1",
     "faiss-cpu>=1.8",
     "sentence-transformers>=3",
+    # torch is sentence-transformers' backend; declared directly so the CPU-index
+    # source below applies (uv only honors [tool.uv.sources] for direct deps).
+    "torch>=2",
     "langsmith>=0.1",
     "gradio>=4",
 ]
@@ -41,6 +44,18 @@ dev = [
 # This is an application, not a library — don't try to build/install the project
 # itself. We import via `src.` with pytest's `pythonpath = ["."]` (see below).
 package = false
+
+# torch resolves to the CUDA build on Linux by default — several GB of nvidia-*
+# wheels we never use (embeddings run on the CPU and we ship faiss-cpu). Pin it to
+# PyTorch's CPU index on Linux so the lock (and the generated requirements*.txt)
+# stay CPU-only. Re-run `make requirements` after changing this.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
