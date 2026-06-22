@@ -62,9 +62,37 @@ def test_does_not_flag_needs_companion_when_item_has_no_companions(make_catalog_
 
 
 def test_never_sets_out_of_stock_flag(make_catalog_item):
-    # Stock is dynamic supplier data — validate_rules must never decide it.
+    # Whether stock exists at all is the inventory check's call, not validate_rules'.
     out = validate_rules(LineItem(sku="X", quantity=3), make_catalog_item())
     assert Flag.OUT_OF_STOCK not in out.flags
+
+
+def test_flags_exceeds_stock_when_the_quantity_outruns_the_recorded_on_hand(make_catalog_item):
+    # The inventory check recorded 140 cases on hand; 200 cases outruns it.
+    item = LineItem(sku="FOIL-ROLL", quantity=200, quantity_on_hand=140)
+    out = validate_rules(item, make_catalog_item())
+    assert Flag.EXCEEDS_STOCK in out.flags
+
+
+def test_flags_exceeds_stock_after_rounding_a_unit_count_into_cases(make_catalog_item):
+    # The over-stock check runs on the FINALIZED case count, so a units order that
+    # rounds above on-hand is caught (the path the deterministic node alone missed).
+    item = LineItem(sku="FOIL-ROLL", unit_quantity=200, quantity_on_hand=140)
+    out = validate_rules(item, make_catalog_item(case_pack=1))
+    assert out.quantity == 200
+    assert Flag.EXCEEDS_STOCK in out.flags
+
+
+def test_does_not_flag_exceeds_stock_when_the_quantity_is_within_on_hand(make_catalog_item):
+    item = LineItem(sku="FOIL-ROLL", quantity=100, quantity_on_hand=140)
+    out = validate_rules(item, make_catalog_item())
+    assert Flag.EXCEEDS_STOCK not in out.flags
+
+
+def test_does_not_flag_exceeds_stock_when_on_hand_is_unknown(make_catalog_item):
+    # No recorded on-hand (None) means "unknown" — never over-flag on a missing figure.
+    out = validate_rules(LineItem(sku="X", quantity=999), make_catalog_item())
+    assert Flag.EXCEEDS_STOCK not in out.flags
 
 
 def test_returns_a_new_item_without_mutating_the_input(make_catalog_item):

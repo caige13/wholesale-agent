@@ -38,7 +38,9 @@ class JsonCatalogRepository:
     def all(self) -> list[CatalogItem]:
         return list(self._by_sku.values())
 
-    def find_candidates(self, query: str, k: int = 5) -> list[ResolutionCandidate]:
+    def find_candidates(
+        self, query: str, k: int = 5, suppliers: list[str] | None = None
+    ) -> list[ResolutionCandidate]:
         raise NotImplementedError(
             "Semantic retrieval lands in the RAG slice (FAISS over "
             "product_name + aliases + category). resolve_skus is unit-tested "

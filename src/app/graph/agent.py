@@ -62,12 +62,15 @@ class LangGraphOrderAgent:
         cart: Cart | None = None,
         history: list[dict] | None = None,
         *,
+        selected_suppliers: list[str] | None = None,
         trace: TraceContext | None = None,
         thread_id: str = "default",
     ) -> AgentResult:
         config = self._config(trace, thread_id)
         try:
-            final = self._graph.invoke(self._initial_state(message, cart, history), config=config)
+            final = self._graph.invoke(
+                self._initial_state(message, cart, history, selected_suppliers), config=config
+            )
         except Exception:
             # The turn boundary is the right place to log a failed turn once — the
             # caller (UI/eval) renders it, but the operational signal shouldn't depend
@@ -82,6 +85,7 @@ class LangGraphOrderAgent:
         cart: Cart | None = None,
         history: list[dict] | None = None,
         *,
+        selected_suppliers: list[str] | None = None,
         trace: TraceContext | None = None,
         thread_id: str = "default",
     ) -> Iterator[StreamEvent]:
@@ -96,7 +100,7 @@ class LangGraphOrderAgent:
         final_values: dict | None = None
         try:
             for chunk in self._graph.stream(
-                self._initial_state(message, cart, history),
+                self._initial_state(message, cart, history, selected_suppliers),
                 config=config,
                 stream_mode=["updates", "values", "messages"],
                 subgraphs=True,
@@ -132,7 +136,12 @@ class LangGraphOrderAgent:
         )
 
     @staticmethod
-    def _initial_state(message: str, cart: Cart | None, history: list[dict] | None) -> dict:
+    def _initial_state(
+        message: str,
+        cart: Cart | None,
+        history: list[dict] | None,
+        selected_suppliers: list[str] | None = None,
+    ) -> dict:
         # A new turn starts with the prior turn's per-turn OUTPUTS cleared. Under a
         # checkpointer OrderState persists across turns, so without this a question's
         # `answer` (or an escalation's `handoff`, or a placed order's `confirmation`)
@@ -146,10 +155,13 @@ class LangGraphOrderAgent:
             "confirmation": None,
             "clarifications": [],
         }
-        # Seed draft_cart ONLY when a cart is supplied; otherwise a checkpointer's
-        # persisted state (keyed by thread_id) provides it, so we don't clobber it.
+        # Seed draft_cart / selected_suppliers ONLY when supplied; otherwise a
+        # checkpointer's persisted state (keyed by thread_id) provides them, so we
+        # don't clobber a carried-over cart or supplier selection with None.
         if cart is not None:
             state["draft_cart"] = cart
+        if selected_suppliers is not None:
+            state["selected_suppliers"] = selected_suppliers
         return state
 
     @staticmethod

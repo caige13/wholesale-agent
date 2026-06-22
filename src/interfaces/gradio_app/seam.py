@@ -55,6 +55,7 @@ def run_turn(
     history: list[dict],
     cart: Cart,
     *,
+    selected_suppliers: list[str] | None = None,
     trace: TraceContext | None = None,
     thread_id: str = "default",
 ) -> tuple[list[dict], Cart]:
@@ -63,10 +64,15 @@ def run_turn(
     Returns the message list (messages format) with this turn appended and the
     cart the agent handed back — always ``result.cart``, so a question turn keeps
     the panel intact (spec §11). The prior ``history`` is forwarded so the agent
-    can resolve follow-ups against the conversation so far; ``trace`` (if any) labels
-    the LangSmith run; ``thread_id`` keys the checkpointer's per-session state.
+    can resolve follow-ups against the conversation so far; ``selected_suppliers``
+    scopes SKU resolution to the customer's chosen suppliers (multi-tenant);
+    ``trace`` (if any) labels the LangSmith run; ``thread_id`` keys the
+    checkpointer's per-session state.
     """
-    result = handle_turn(message, cart, agent, history, trace=trace, thread_id=thread_id)
+    result = handle_turn(
+        message, cart, agent, history,
+        selected_suppliers=selected_suppliers, trace=trace, thread_id=thread_id,
+    )
     new_history = [
         *history,
         {"role": "user", "content": message},

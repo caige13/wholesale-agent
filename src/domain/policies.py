@@ -20,11 +20,20 @@ BLOCKING_FLAGS = frozenset(
     {
         Flag.AMBIGUOUS_SIZE,
         Flag.OUT_OF_STOCK,
+        Flag.EXCEEDS_STOCK,
         Flag.NEEDS_COMPANION,
         Flag.BELOW_MINIMUM,
         Flag.MISSING_QUANTITY,
     }
 )
+
+# A subset of BLOCKING_FLAGS: these also keep the line OUT of the cart until the
+# customer resolves it — the order is wrong as stated (ambiguous size, un/over-
+# fillable, below minimum, or missing a quantity), so don't bank it; ask first.
+# NEEDS_COMPANION is deliberately excluded: the parent line is valid and lands while
+# we merely upsell the add-on (apply_node owns this; the gate still clarifies on all
+# blocking flags).
+HOLD_FROM_CART_FLAGS = BLOCKING_FLAGS - frozenset({Flag.NEEDS_COMPANION})
 
 # --- SKU resolution ---------------------------------------------------------
 MIN_SCORE = 0.5  # a top candidate below this is too weak to commit to

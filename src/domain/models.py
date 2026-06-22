@@ -55,14 +55,17 @@ class Flag(StrEnum):
 
     ``validate_rules`` sets the static-catalog flags (``NEEDS_COMPANION``,
     ``BELOW_MINIMUM``, ``ROUNDED_TO_CASE_PACK``) plus ``MISSING_QUANTITY`` when a
-    resolved line has no amount; ``OUT_OF_STOCK`` is set by the inventory check
-    against the supplier API. Some flags are *blocking* (the gate clarifies on them
-    even at high confidence); ``ROUNDED_TO_CASE_PACK`` is informational only. The
-    blocking set lives in ``src.domain.policies`` so the gate owns that policy.
+    resolved line has no amount, and ``EXCEEDS_STOCK`` when the finalized case count
+    outruns the on-hand count the inventory check recorded on the line.
+    ``OUT_OF_STOCK`` is set by the inventory check itself (no stock at all). Some
+    flags are *blocking* (the gate clarifies on them even at high confidence);
+    ``ROUNDED_TO_CASE_PACK`` is informational only. The blocking set lives in
+    ``src.domain.policies`` so the gate owns that policy.
     """
 
     NEEDS_COMPANION = "needs_companion"
     OUT_OF_STOCK = "out_of_stock"
+    EXCEEDS_STOCK = "exceeds_stock"
     AMBIGUOUS_SIZE = "ambiguous_size"
     BELOW_MINIMUM = "below_minimum"
     MISSING_QUANTITY = "missing_quantity"
@@ -100,6 +103,9 @@ class LineItem(BaseModel):
     # cases; validate_rules rounds it up into `quantity` (whole cases).
     unit_quantity: int | None = None
     unit_price: float | None = None
+    # Supplier's on-hand case count, recorded by the inventory check (None = unknown).
+    # validate_rules reads it to raise EXCEEDS_STOCK, and the clarification names it.
+    quantity_on_hand: int | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     flags: list[Flag] = Field(default_factory=list)
     # When resolution is ambiguous, the candidate product names to offer the user

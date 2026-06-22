@@ -27,6 +27,10 @@ class OrderState(TypedDict, total=False):
     raw_message: str  # original user text this turn
     clean_message: str  # redacted + unit-normalized
     pii_found: list[str]  # guardrail trace visibility (types only)
+    # The customer's chosen suppliers (multi-tenant, Phase 0). resolve scopes SKU
+    # retrieval to this set; None/empty searches across all suppliers. See
+    # docs/multi-tenant-suppliers.md.
+    selected_suppliers: list[str]
     # Recent chat turns ({role, content}) for follow-up context. Checkpointer-owned:
     # the agent records each turn via update_state, so the UI doesn't thread it.
     history: Annotated[list[dict], add]

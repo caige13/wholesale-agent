@@ -27,11 +27,20 @@ class CatalogRepository(Protocol):
         """Return every catalog item (used to seed the vector store and rules)."""
         ...
 
-    def find_candidates(self, query: str, k: int = 5) -> list[ResolutionCandidate]:
+    def find_candidates(
+        self, query: str, k: int = 5, suppliers: list[str] | None = None
+    ) -> list[ResolutionCandidate]:
         """Return up to ``k`` candidate SKUs for a free-text query, best first.
 
         The RAG retrieval seam: the FAISS-backed adapter embeds the query and
         returns nearest catalog rows as scored ``ResolutionCandidate``s for
         ``resolve_skus`` to disambiguate.
+
+        ``suppliers`` scopes the search to the customer's selected tenants — only
+        those suppliers' catalogs are searched. ``None`` or an empty list means
+        search across all suppliers (the single-tenant default). This is the
+        multi-tenant seam: the same signature holds whether the adapter is FAISS
+        (metadata filter) or a future vector DB (a ``WHERE supplier IN (…)``
+        pre-filter); see ``docs/multi-tenant-suppliers.md``.
         """
         ...

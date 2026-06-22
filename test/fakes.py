@@ -79,25 +79,33 @@ class FakeCatalog:
     def all(self):
         return list(self._items.values())
 
-    def find_candidates(self, query, k=5):
-        return self._candidates.get(query.strip().lower(), [])
+    def find_candidates(self, query, k=5, suppliers=None):
+        candidates = self._candidates.get(query.strip().lower(), [])
+        if suppliers:  # scope to the chosen tenants, mirroring the real adapter
+            allowed = set(suppliers)
+            candidates = [c for c in candidates if c.item.supplier in allowed]
+        return candidates[:k]
 
 
 class FakeSupplier:
-    """Fake supplier gateway: every SKU in stock and unpriced unless named in
-    ``out_of_stock`` / ``prices``."""
+    """Fake supplier gateway: every SKU in stock, unpriced, and with 0 on hand unless
+    named in ``out_of_stock`` / ``prices`` / ``on_hand``."""
 
     supplier = SUPPLIER
 
-    def __init__(self, out_of_stock=None, prices=None):
+    def __init__(self, out_of_stock=None, prices=None, on_hand=None):
         self._out_of_stock = set(out_of_stock or ())
         self._prices = prices or {}
+        self._on_hand = on_hand or {}
 
     def get_price(self, sku):
         return self._prices.get(sku)
 
     def check_inventory(self, sku):
-        return InventoryStatus(in_stock=sku not in self._out_of_stock)
+        return InventoryStatus(
+            in_stock=sku not in self._out_of_stock,
+            quantity_on_hand=self._on_hand.get(sku, 0),
+        )
 
     def submit_order(self, items):
         return OrderConfirmation(order_id="TEST-ORDER", supplier=self.supplier)
@@ -128,9 +136,11 @@ class FakeOrderAgent:
         return self.calls[-1][2] if self.calls else None
 
     def run(
-        self, message: str, cart: Cart, history=None, *, trace=None, thread_id="default"
+        self, message: str, cart: Cart, history=None, *,
+        selected_suppliers=None, trace=None, thread_id="default",
     ) -> AgentResult:
-        # trace/thread_id are observability/persistence-only; the stub records inputs.
+        # selected_suppliers/trace/thread_id are scoping/observability/persistence
+        # inputs the stub doesn't act on; it just records the core inputs.
         self.calls.append((message, cart, history))
         return self._result
 

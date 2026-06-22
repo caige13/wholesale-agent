@@ -72,6 +72,7 @@ def handle_turn(
     agent: OrderAgent,
     history: list[dict] | None = None,
     *,
+    selected_suppliers: list[str] | None = None,
     trace: TraceContext | None = None,
     thread_id: str = "default",
 ) -> TurnResult:
@@ -81,9 +82,14 @@ def handle_turn(
     *behavioral* input — it feeds the prompt so the agent can resolve follow-ups;
     ``trace`` is *observability* metadata the agent attaches to the LangSmith run and
     that never changes the result. They're orthogonal, so neither branches on the
-    other — both are forwarded as-is. ``thread_id`` keys the checkpointer's per-turn state.
+    other — both are forwarded as-is. ``selected_suppliers`` scopes SKU resolution to
+    the customer's chosen suppliers (multi-tenant). ``thread_id`` keys the
+    checkpointer's per-turn state.
     """
-    result = agent.run(message, cart, history, trace=trace, thread_id=thread_id)
+    result = agent.run(
+        message, cart, history,
+        selected_suppliers=selected_suppliers, trace=trace, thread_id=thread_id,
+    )
     reply = _compose_reply(result)
     agent.record_turn(message, reply, thread_id=thread_id)
     return TurnResult(reply=reply, cart=result.draft_cart)
@@ -95,6 +101,7 @@ def stream_turn(
     agent,
     history: list[dict] | None = None,
     *,
+    selected_suppliers: list[str] | None = None,
     trace: TraceContext | None = None,
     thread_id: str = "default",
 ) -> Iterator[StreamFrame]:
@@ -103,11 +110,15 @@ def stream_turn(
     Translates the agent's ``stream_run`` events into UI frames. The cart panel is only
     meant to update on the final frame, so intermediate frames carry the prior ``cart``
     and ``done=False``; the terminal frame carries the composed reply and the new cart.
-    Requires a streaming-capable agent (``stream_run``); the blocking path is ``handle_turn``.
+    ``selected_suppliers`` scopes SKU resolution (multi-tenant). Requires a
+    streaming-capable agent (``stream_run``); the blocking path is ``handle_turn``.
     """
     answer: list[str] = []
     reply = ""
-    for kind, payload in agent.stream_run(message, cart, history, trace=trace, thread_id=thread_id):
+    for kind, payload in agent.stream_run(
+        message, cart, history,
+        selected_suppliers=selected_suppliers, trace=trace, thread_id=thread_id,
+    ):
         if kind == "progress":
             label = _PROGRESS_LABELS.get(payload)
             if label and not answer:  # once the answer is streaming, trailing progress is stale

@@ -28,7 +28,7 @@ from src.domain.models import (
     LineItem,
     OrderStatus,
 )
-from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD
+from src.domain.policies import BLOCKING_FLAGS, CONFIDENCE_THRESHOLD, HOLD_FROM_CART_FLAGS
 from src.domain.redaction import redact_normalize
 from src.domain.resolution import resolve_skus
 from src.domain.rules import validate_rules
@@ -48,8 +48,9 @@ def resolve_node(
     state: dict, catalog: CatalogRepository, item_memory: dict[str, str] | None = None
 ) -> dict:
     ops = []
+    suppliers = state.get("selected_suppliers")  # multi-tenant: scope retrieval to the tenants
     for op in state.get("cart_ops", []):
-        candidates = catalog.find_candidates(op.item.raw_text)
+        candidates = catalog.find_candidates(op.item.raw_text, suppliers=suppliers)
         resolved = resolve_skus(op.item, candidates, item_memory)
         ops.append(op.model_copy(update={"item": resolved}))
     return {"cart_ops": ops}
@@ -147,9 +148,10 @@ def _line_from_catalog(item: CatalogItem, quantity: int | None) -> LineItem:
 
 
 def check_inventory_node(state: dict, supplier: SupplierGateway) -> dict:
-    """Enrich each resolved line with live supplier data: fill ``unit_price`` and
-    raise ``OUT_OF_STOCK`` when the supplier has none. Runs before ``validate``,
-    which preserves the flag/price. Removals and unresolved lines are skipped.
+    """Enrich each resolved line with live supplier data: fill ``unit_price``, raise
+    ``OUT_OF_STOCK`` when the supplier has none, and record ``quantity_on_hand`` so
+    ``validate`` (which runs next, after it rounds the line to whole cases) can flag
+    an order that outruns it. Removals and unresolved lines are skipped.
     """
     ops = []
     for op in state.get("cart_ops", []):
@@ -161,8 +163,15 @@ def check_inventory_node(state: dict, supplier: SupplierGateway) -> dict:
         price = supplier.get_price(op.item.sku)
         if price is not None:
             updates["unit_price"] = price
-        if not status.in_stock and Flag.OUT_OF_STOCK not in op.item.flags:
-            updates["flags"] = [*op.item.flags, Flag.OUT_OF_STOCK]
+        if not status.in_stock:
+            if Flag.OUT_OF_STOCK not in op.item.flags:
+                updates["flags"] = [*op.item.flags, Flag.OUT_OF_STOCK]
+        # Record on-hand (whole cases) so validate can compare it against the
+        # finalized case count. A 0 — including the unknown-SKU default
+        # (in_stock=True, quantity_on_hand=0) — means "unknown", so leave the field
+        # None and a missing inventory row never falsely trips EXCEEDS_STOCK.
+        elif status.quantity_on_hand > 0:
+            updates["quantity_on_hand"] = status.quantity_on_hand
         if updates:
             op = op.model_copy(update={"item": op.item.model_copy(update=updates)})
         ops.append(op)
@@ -217,12 +226,18 @@ def _without(flags: list[Flag], flag: Flag) -> list[Flag]:
 
 def apply_node(state: dict) -> dict:
     cart: Cart = state.get("draft_cart") or Cart()
-    # Skip unresolved lines and quantity-less adds — the gate clarifies on those
-    # instead of landing a half-line ("I want salsa cups" → ask how many first).
+    # A line lands only if it's clean enough to draft. Skip unresolved lines,
+    # quantity-less adds ("I want salsa cups" → ask how many first), and any line
+    # carrying a HOLD_FROM_CART flag — the order is wrong as stated (ambiguous,
+    # out/over stock, or below minimum), so don't bank it; the gate clarifies
+    # instead. NEEDS_COMPANION is intentionally not a hold flag: the parent line is
+    # valid and lands while we upsell the add-on.
     ops = [
         op
         for op in state.get("cart_ops", [])
-        if op.item.sku and not (op.op is CartOpKind.ADD and op.item.quantity is None)
+        if op.item.sku
+        and not (op.op is CartOpKind.ADD and op.item.quantity is None)
+        and not (HOLD_FROM_CART_FLAGS & set(op.item.flags))
     ]
     return {"draft_cart": cart.apply(ops)}
 
@@ -288,9 +303,21 @@ def build_clarifications(line_items: list[LineItem]) -> list[str]:
             else:
                 questions.append(f"{label} needs matching add-ons — should I add them?")
         elif Flag.OUT_OF_STOCK in blocking:
-            questions.append(f"{label} is out of stock — want a substitute or to proceed?")
+            questions.append(f"{label} is out of stock — want a substitute or something else?")
+        elif Flag.EXCEEDS_STOCK in blocking:
+            if line.quantity_on_hand is not None:
+                questions.append(
+                    f"{label}: you asked for {line.quantity} cases but only "
+                    f"{line.quantity_on_hand} are in stock — how many would you like? "
+                    f"(up to {line.quantity_on_hand})"
+                )
+            else:
+                questions.append(
+                    f"{label}: that's more than we have in stock — "
+                    "how many would you like instead?"
+                )
         elif Flag.BELOW_MINIMUM in blocking:
-            questions.append(f"{label} is below its minimum order — increase the quantity?")
+            questions.append(f"{label} is below the minimum order — how many would you like?")
         elif Flag.AMBIGUOUS_SIZE in blocking:
             questions.append(f"What size of {label} did you want?")
     return questions

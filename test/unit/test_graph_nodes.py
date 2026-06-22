@@ -53,6 +53,35 @@ def test_resolve_node_sets_the_sku_on_each_op_item(make_catalog_item):
     assert out["cart_ops"][0].item.sku == "PCUP-2"
 
 
+def test_resolve_node_scopes_retrieval_to_the_selected_suppliers(make_catalog_item):
+    # Two suppliers carry a "salsa cups" match; supplier-a even scores higher. The
+    # customer selected only supplier-b, so a is filtered out before resolution and
+    # the line resolves to b's SKU (multi-tenant scoping).
+    a = make_catalog_item(sku="PCUP-2", product_name="2oz Portion Cup",
+                          aliases=["salsa cups"], supplier="supplier-a")
+    b = make_catalog_item(sku="SOUFFLE-2", product_name="2oz Souffle Cup",
+                          aliases=["salsa cups"], supplier="supplier-b")
+    repo = FakeCatalogRepo(candidates_by_phrase={"salsa cups": [
+        ResolutionCandidate(item=a, score=0.95), ResolutionCandidate(item=b, score=0.9),
+    ]})
+    state = {"cart_ops": [_add(LineItem(raw_text="salsa cups"))],
+             "selected_suppliers": ["supplier-b"]}
+    out = resolve_node(state, repo)
+    assert out["cart_ops"][0].item.sku == "SOUFFLE-2"
+    assert out["cart_ops"][0].item.supplier == "supplier-b"
+
+
+def test_resolve_node_searches_all_suppliers_when_none_are_selected(make_catalog_item):
+    # No selection (the default) ⇒ the highest-scoring match across suppliers wins.
+    a = make_catalog_item(sku="PCUP-2", aliases=["salsa cups"], supplier="supplier-a")
+    b = make_catalog_item(sku="SOUFFLE-2", aliases=["salsa cups"], supplier="supplier-b")
+    repo = FakeCatalogRepo(candidates_by_phrase={"salsa cups": [
+        ResolutionCandidate(item=a, score=0.95), ResolutionCandidate(item=b, score=0.7),
+    ]})
+    out = resolve_node({"cart_ops": [_add(LineItem(raw_text="salsa cups"))]}, repo)
+    assert out["cart_ops"][0].item.sku == "PCUP-2"
+
+
 def test_validate_node_raises_companion_flag_and_names_the_offer(make_catalog_item):
     deli = make_catalog_item(sku="DELI-16", companion_skus=["LID-DELI"])
     lid = make_catalog_item(sku="LID-DELI", product_name="Deli Container Lid", category="lids")
@@ -134,6 +163,37 @@ def test_apply_node_skips_an_add_with_no_quantity():
     assert out["draft_cart"].is_empty()
 
 
+def test_apply_node_does_not_land_a_line_that_exceeds_available_stock():
+    # "200 cases of foil" when only 140 are in stock — don't commit the over-order;
+    # the gate clarifies for a workable amount instead of banking 200.
+    op = _add(LineItem(
+        raw_text="foil", sku="FOIL-ROLL", supplier=S, quantity=200,
+        quantity_on_hand=140, flags=[Flag.EXCEEDS_STOCK],
+    ))
+    out = apply_node({"cart_ops": [op], "draft_cart": Cart()})
+    assert out["draft_cart"].is_empty()
+
+
+def test_apply_node_does_not_land_an_out_of_stock_or_below_minimum_line():
+    # Both flags mean the order is wrong as stated — the gate clarifies, the line
+    # doesn't get banked. NEEDS_COMPANION (a valid parent) is covered separately.
+    oos = _add(LineItem(raw_text="limes", sku="LIME-FRESH", supplier=S, quantity=2,
+                        flags=[Flag.OUT_OF_STOCK]))
+    below = _add(LineItem(raw_text="napkins", sku="NAPKIN-1", supplier=S, quantity=1,
+                          flags=[Flag.BELOW_MINIMUM]))
+    out = apply_node({"cart_ops": [oos, below], "draft_cart": Cart()})
+    assert out["draft_cart"].is_empty()
+
+
+def test_apply_node_still_lands_a_line_that_only_needs_a_companion():
+    # NEEDS_COMPANION is a blocking flag but NOT a hold flag: the deli is a valid
+    # order, so it lands while the desk upsells the lid.
+    op = _add(LineItem(raw_text="deli", sku="DELI-16", product_name="16oz Deli Container",
+                       supplier=S, quantity=3, flags=[Flag.NEEDS_COMPANION]))
+    out = apply_node({"cart_ops": [op], "draft_cart": Cart()})
+    assert [li.sku for li in out["draft_cart"].all_lines()] == ["DELI-16"]
+
+
 def test_clarify_node_produces_questions_and_sets_status():
     op = _add(LineItem(raw_text="deli containers", confidence=0.3))
     out = clarify_node({"cart_ops": [op]})
@@ -191,6 +251,16 @@ def test_build_clarifications_asks_how_many_for_a_missing_quantity():
     question = build_clarifications([line])[0]
     assert "How many" in question
     assert "2oz Portion Cup" in question
+
+
+def test_build_clarifications_names_the_requested_and_available_counts_when_over_stock():
+    line = LineItem(
+        raw_text="foil", sku="FOIL-ROLL", product_name="Aluminum Foil Roll",
+        confidence=0.95, quantity=200, quantity_on_hand=140, flags=[Flag.EXCEEDS_STOCK],
+    )
+    question = build_clarifications([line])[0]
+    assert "200" in question
+    assert "140" in question
 
 
 def test_build_clarifications_is_silent_for_clean_items():

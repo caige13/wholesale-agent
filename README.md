@@ -238,7 +238,7 @@ test-first, and the commit history follows that order.
 5. **Answer faithfulness.** RAG answers grounded in the catalog (GPT-4o judge, needs `OPENAI_API_KEY`).
 
 A representative run scores **100% across all five metrics** (extraction,
-clarification, order submission, escalation, answer faithfulness) over the 26-row
+clarification, order submission, escalation, answer faithfulness) over the 28-row
 dataset. The numbers are model-dependent, and the dataset's expectations are never
 relaxed to pass. A regression surfaces as a dropped metric, not a silently edited
 row. The deferred features below (`reorder_usual`, richer `out_of_stock` handling)

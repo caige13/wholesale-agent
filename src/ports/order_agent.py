@@ -45,6 +45,7 @@ class OrderAgent(Protocol):
         cart: Cart | None = None,
         history: list[dict] | None = None,
         *,
+        selected_suppliers: list[str] | None = None,
         trace: TraceContext | None = None,
         thread_id: str = "default",
     ) -> AgentResult:
@@ -53,9 +54,11 @@ class OrderAgent(Protocol):
         ``cart`` seeds the running cart; it may be omitted when a checkpointer holds
         it (the persisted state under ``thread_id`` supplies it instead). ``history``
         is the recent conversation ({role, content}); it lets the agent interpret
-        follow-ups in context (e.g. answering a clarification). ``trace`` is an optional
-        observability context the boundary attaches to the LangSmith run; concrete
-        agents may ignore it. ``thread_id`` keys the checkpointer's per-conversation state.
+        follow-ups in context (e.g. answering a clarification). ``selected_suppliers``
+        scopes SKU resolution to the customer's chosen suppliers (multi-tenant);
+        ``None`` searches all. ``trace`` is an optional observability context the
+        boundary attaches to the LangSmith run; concrete agents may ignore it.
+        ``thread_id`` keys the checkpointer's per-conversation state.
         """
         ...
 

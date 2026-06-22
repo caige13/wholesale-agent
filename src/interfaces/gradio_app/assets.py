@@ -168,6 +168,70 @@ footer { display:none !important; }
   text-transform:uppercase; letter-spacing:.1em;
 }
 
+/* Preferred-suppliers routing field — an order-scope preference styled as a paper
+   form field (like the ask box), set apart from the chat by a hairline rule. Its
+   selected tokens are olive uppercase-mono chips that echo the slip's supplier
+   group headers (.grp__name), tying "who I order from" to the grouped cart. */
+/* The field IS the dropdown block (#supselect) — no gr.Group wrapper, which both
+   double-rendered the id (two dashed rules) and tan-filled its padding. Flatten the
+   block + its form/styler wrappers to bare paper, then add a single dashed rule below
+   as a section separator; the cream field box itself comes from .wrap/.container. */
+#supselect, .gradio-container .form:has(#supselect),
+#supselect > .styler, #supselect .form {
+  background:transparent !important; border:none !important; box-shadow:none !important;
+  border-radius:0 !important;
+}
+#supselect {
+  padding:0 0 14px 0 !important; margin:0 0 14px 0 !important;
+  border-bottom:2px dashed var(--line) !important; overflow:visible !important;
+}
+/* label + helper text → mono ink-soft, like the slip meta lines */
+#supselect .block-title, #supselect label > span:first-child,
+#supselect span[data-testid="block-info"], #supselect .block-info {
+  font-family:'JetBrains Mono',monospace !important;
+  font-size:11px !important; text-transform:uppercase; letter-spacing:.16em;
+  color:var(--ink-soft) !important; font-weight:700 !important;
+}
+#supselect span[data-testid="block-info"], #supselect .block-info {
+  letter-spacing:.04em; font-weight:400 !important; text-transform:none;
+}
+/* the control box → one clean cream field with a single ink outline (matches #askbox) */
+#supselect .wrap, #supselect .secondary-wrap, #supselect .container,
+#supselect input { background:var(--card) !important; }
+#supselect .wrap, #supselect .container {
+  border:1.5px solid var(--ink) !important; border-radius:4px !important;
+  box-shadow:none !important;
+}
+/* Inset the inner token row so selected chips / the input don't sit flush against
+   the ink border (mirrors #askbox, whose textarea carries the inset). Padding goes
+   on .wrap only — its outer edge stays at .container's inner edge, so the two
+   coincident borders remain coincident and no second outline is revealed. */
+#supselect .wrap {
+  padding:4px 8px !important;
+}
+#supselect input {
+  font-family:'JetBrains Mono',monospace !important; color:var(--ink) !important;
+}
+/* selected suppliers → olive tokens echoing .grp__name in the slip */
+#supselect .token {
+  background:rgba(91,106,57,.10) !important; border:1px solid var(--olive) !important;
+  border-radius:3px !important; color:var(--olive) !important;
+  font-family:'JetBrains Mono',monospace !important;
+  font-size:10px !important; text-transform:uppercase; letter-spacing:.1em;
+  padding:2px 4px 2px 8px !important;
+}
+#supselect .token *, #supselect .token .token-remove { color:var(--olive) !important; }
+#supselect .token .token-remove { background:transparent !important; }
+/* dropdown options menu → paper card, ink text, olive hover */
+#supselect ul.options { background:var(--card) !important; border:1.5px solid var(--ink) !important; }
+#supselect ul.options li {
+  font-family:'JetBrains Mono',monospace !important; font-size:12px !important;
+  color:var(--ink) !important;
+}
+#supselect ul.options li.active, #supselect ul.options li:hover {
+  background:rgba(91,106,57,.12) !important; color:var(--olive) !important;
+}
+
 /* The packing slip — shared card chrome for the static (.slip) and interactive
    (#slippanel) views; each keeps only its own padding delta below. The slip
    background matches the page paper (not the lighter --card) so it blends in

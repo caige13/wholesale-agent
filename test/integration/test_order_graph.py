@@ -170,7 +170,7 @@ def test_clean_order_drafts_with_items_and_no_clarification():
     assert result.clarifications == []
 
 
-def test_out_of_stock_order_drafts_the_line_but_asks_to_clarify():
+def test_out_of_stock_order_asks_to_clarify_and_does_not_land_the_line():
     lime = _item("LIME-FRESH", "Fresh Limes", aliases=["limes"])
     catalog = FakeCatalog(
         items_by_sku={"LIME-FRESH": lime},
@@ -182,8 +182,40 @@ def test_out_of_stock_order_drafts_the_line_but_asks_to_clarify():
         Intent.ORDER, parsed=parsed, catalog=catalog, supplier=supplier
     ).run("2 cases of limes", Cart())
     assert result.clarifications  # gate stops on OUT_OF_STOCK
-    # The line still lands in the cart (apply runs before the gate).
-    assert [li.sku for li in result.draft_cart.all_lines()] == ["LIME-FRESH"]
+    # Like over-stock, an unfillable line is not banked — the desk asks first.
+    assert result.draft_cart.is_empty()
+
+
+def test_over_stock_order_asks_to_clarify_and_does_not_land_the_line():
+    # "200 cases of foil" when only 140 are on hand: unlike out-of-stock, the line is
+    # NOT banked — the gate clarifies for a workable amount before anything lands.
+    foil = _item("FOIL-ROLL", "Aluminum Foil Roll", aliases=["foil"])
+    catalog = FakeCatalog(
+        items_by_sku={"FOIL-ROLL": foil},
+        candidates_by_phrase={"foil": [ResolutionCandidate(item=foil, score=0.95)]},
+    )
+    parsed = ParsedOrder(items=[ParsedItem(phrase="foil", quantity=200)])
+    supplier = FakeSupplier(on_hand={"FOIL-ROLL": 140})
+    result = _agent(
+        Intent.ORDER, parsed=parsed, catalog=catalog, supplier=supplier
+    ).run("200 cases of foil", Cart())
+    assert result.clarifications  # gate stops on EXCEEDS_STOCK
+    assert "140" in result.clarifications[0]  # and names the available count
+    assert result.draft_cart.is_empty()  # the over-order never lands
+
+
+def test_below_minimum_order_asks_to_clarify_and_does_not_land_the_line():
+    # 1 case of napkins when the minimum is 2 — the order is wrong as stated, so the
+    # desk asks instead of banking the under-minimum line.
+    napkin = _item("NAPKIN-1", "Dinner Napkins", aliases=["napkins"], min_order=2)
+    catalog = FakeCatalog(
+        items_by_sku={"NAPKIN-1": napkin},
+        candidates_by_phrase={"napkins": [ResolutionCandidate(item=napkin, score=0.95)]},
+    )
+    parsed = ParsedOrder(items=[ParsedItem(phrase="napkins", quantity=1)])
+    result = _agent(Intent.ORDER, parsed=parsed, catalog=catalog).run("1 case of napkins", Cart())
+    assert result.clarifications  # gate stops on BELOW_MINIMUM
+    assert result.draft_cart.is_empty()  # the under-minimum line never lands
 
 
 def test_a_clean_order_builds_a_draft_but_does_not_confirm_until_placed():

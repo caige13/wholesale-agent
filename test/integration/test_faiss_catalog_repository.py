@@ -51,3 +51,31 @@ def test_semantically_matches_salsa_cups_to_the_portion_cup_sku(faiss_repo):
 
 def test_respects_the_k_limit(faiss_repo):
     assert len(faiss_repo.find_candidates("containers", k=3)) <= 3
+
+
+def test_find_candidates_scopes_to_the_selected_suppliers_across_a_shared_sku():
+    # Two suppliers carry the SAME sku (DELI-16) for different products. Scoping to
+    # one returns only its items, and the composite (supplier, sku) key maps the hit
+    # back to the right product — proving multi-tenant queries don't cross-leak.
+    from src.adapters.faiss_catalog_repository import FaissCatalogRepository
+    from src.bootstrap import build_embeddings
+    from src.domain.models import CatalogItem
+
+    items = [
+        CatalogItem(sku="DELI-16", product_name="16oz Deli Container", category="containers",
+                    unit_size="16oz", case_pack=500, supplier="supplier-a",
+                    aliases=["deli container"]),
+        CatalogItem(sku="DELI-16", product_name="16oz Deli Tub", category="containers",
+                    unit_size="16oz", case_pack=400, supplier="supplier-b",
+                    aliases=["deli container"]),
+    ]
+    repo = FaissCatalogRepository(items, build_embeddings())
+
+    scoped = repo.find_candidates("deli container", suppliers=["supplier-b"])
+    assert scoped
+    assert all(c.item.supplier == "supplier-b" for c in scoped)
+    assert all(c.item.product_name == "16oz Deli Tub" for c in scoped)  # shared sku, right item
+
+    # Unscoped, both suppliers' items are reachable.
+    suppliers = {c.item.supplier for c in repo.find_candidates("deli container", k=5)}
+    assert suppliers == {"supplier-a", "supplier-b"}

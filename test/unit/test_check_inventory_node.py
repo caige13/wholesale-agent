@@ -45,3 +45,21 @@ def test_preserves_flags_already_on_the_line():
     (deli,) = _items(check_inventory_node(state, supplier))
     assert Flag.NEEDS_COMPANION in deli.flags
     assert Flag.OUT_OF_STOCK in deli.flags
+
+
+def test_records_on_hand_so_validate_can_check_it_against_the_quantity():
+    state = {"cart_ops": [_add("FOIL-ROLL", quantity=200)]}
+    supplier = FakeSupplier(on_hand={"FOIL-ROLL": 140})
+    (foil,) = _items(check_inventory_node(state, supplier))
+    assert foil.quantity_on_hand == 140
+    # The over-stock flag itself is raised later, by validate_rules — not here.
+    assert Flag.EXCEEDS_STOCK not in foil.flags
+
+
+def test_leaves_on_hand_unset_for_an_unknown_or_zero_stock_sku():
+    # An unknown SKU defaults to in_stock=True, quantity_on_hand=0 — recorded as None
+    # ("unknown"), so a missing inventory row never makes validate falsely over-flag.
+    state = {"cart_ops": [_add("MYSTERY-1", quantity=5)]}
+    supplier = FakeSupplier()
+    (mystery,) = _items(check_inventory_node(state, supplier))
+    assert mystery.quantity_on_hand is None

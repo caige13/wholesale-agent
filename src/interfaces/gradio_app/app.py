@@ -47,24 +47,30 @@ def _theme(gr):
     )
 
 
-def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
+def build_app(agent: OrderAgent, *, suppliers: list[str] | None = None,
+              trace_enabled: bool = False):
     """Build the Gradio Blocks app over ``agent``. Gradio imported lazily.
 
     Theme + css are applied at ``launch`` time (Gradio 6 moved them off the
     ``Blocks`` constructor), so the Blocks here is structural only.
 
-    ``trace_enabled`` (set by ``launch`` from settings) decides whether each turn
-    carries a ``ui`` ``TraceContext`` for LangSmith; tests build the app without it.
+    ``suppliers`` (the catalog's distinct suppliers) drives the optional "Preferred
+    suppliers" multi-select that scopes SKU resolution; omit it (tests) and the
+    control isn't rendered and every turn searches all suppliers. ``trace_enabled``
+    (set by ``launch`` from settings) decides whether each turn carries a ``ui``
+    ``TraceContext`` for LangSmith.
     """
     import gradio as gr
 
-    def respond(message: str, history: list[dict], cart: Cart, thread_id: str):
+    def respond(message: str, history: list[dict], cart: Cart, thread_id: str,
+                selected_suppliers: list[str] | None = None):
         """Stream the reply as work happens, with silent recovery.
 
         Yields map to ``[chat, cart_state, msg]``. Progress shows as faint italic ink;
         the answer streams in; the cart commits once, on the final frame. The agent owns
         history via the checkpointer, so it isn't threaded here — ``history`` is just the
-        chat widget's display. A stream error falls back to one blocking turn, unseen.
+        chat widget's display. ``selected_suppliers`` (from the routing field, empty ⇒
+        all) scopes SKU resolution. A stream error falls back to one blocking turn, unseen.
         """
         if not message or not message.strip():
             yield history, gr.skip(), ""
@@ -81,7 +87,8 @@ def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
         trace = _ui_trace(len(history)) if trace_enabled else None
         try:
             done = False
-            for frame in stream_turn(message, cart, agent, trace=trace, thread_id=thread_id):
+            for frame in stream_turn(message, cart, agent, selected_suppliers=selected_suppliers,
+                                     trace=trace, thread_id=thread_id):
                 text = f"*{frame.reply}*" if frame.phase == "progress" else frame.reply
                 yield bubble(text), (frame.cart if frame.done else gr.skip()), ""
                 done = frame.done
@@ -91,7 +98,8 @@ def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
             logging.getLogger(__name__).exception("streaming turn failed — recovering silently")
 
         # Silent recovery: one blocking turn, so a stream error stays invisible.
-        result = handle_turn(message, cart, agent, trace=trace, thread_id=thread_id)
+        result = handle_turn(message, cart, agent, selected_suppliers=selected_suppliers,
+                             trace=trace, thread_id=thread_id)
         yield bubble(result.reply), result.cart, gr.skip()
 
     def reset():
@@ -138,10 +146,25 @@ def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
     with gr.Blocks(title="The Order Desk", fill_height=True) as demo:
         cart_state = gr.State(Cart())
         thread_state = gr.State("default")  # checkpointer key; unique per session (demo.load)
+        supplier_select = None  # the optional "Preferred suppliers" field, built below
         gr.HTML(_MASTHEAD)
 
         with gr.Row(equal_height=False):
             with gr.Column(scale=3):
+                # Order-scoping preference (multi-tenant): scope SKU resolution to the
+                # chosen suppliers. Built only when the catalog reports suppliers; empty
+                # selection ⇒ search all. Set apart from the chat as a routing field.
+                if suppliers:
+                    supplier_select = gr.Dropdown(
+                        choices=suppliers,
+                        value=[],
+                        multiselect=True,
+                        label="Preferred suppliers",
+                        info="Leave empty to search every supplier.",
+                        elem_id="supselect",
+                        interactive=True,
+                        filterable=False,
+                    )
                 chat = gr.Chatbot(
                     value=_initial_history(),
                     elem_id="deskchat",
@@ -166,6 +189,8 @@ def build_app(agent: OrderAgent, *, trace_enabled: bool = False):
 
         outputs = [chat, cart_state, msg]
         respond_inputs = [msg, chat, cart_state, thread_state]
+        if supplier_select is not None:  # carry the supplier selection into each turn
+            respond_inputs.append(supplier_select)
         msg.submit(respond, respond_inputs, outputs)
         send.click(respond, respond_inputs, outputs)
         new_ticket.click(reset, None, [chat, cart_state, msg, thread_state])
@@ -191,6 +216,12 @@ def launch(**kwargs):
     tracing = configure_tracing(settings)
     logging.getLogger(__name__).info(tracing_status_line(settings, tracing))
 
+    # The catalog's distinct suppliers populate the "Preferred suppliers" field —
+    # sourced from the keyless JSON catalog (no embeddings) so it's cheap.
+    from src.adapters import JsonCatalogRepository
+
+    suppliers = sorted({item.supplier for item in JsonCatalogRepository().all()})
+
     kwargs.setdefault("theme", _theme(gr))
     kwargs.setdefault("css", _CSS)
-    build_app(build_agent(), trace_enabled=tracing).launch(**kwargs)
+    build_app(build_agent(), suppliers=suppliers, trace_enabled=tracing).launch(**kwargs)

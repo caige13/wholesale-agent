@@ -40,6 +40,7 @@
     "unit_size": "2oz",
     "case_pack": 2500,
     "min_order": 1,
+    "companion_skus": ["LID-PCUP"],
     "supplier": "acme-foodservice"
   },
   {
@@ -50,6 +51,7 @@
     "unit_size": "4oz",
     "case_pack": 2500,
     "min_order": 1,
+    "companion_skus": ["LID-PCUP"],
     "supplier": "acme-foodservice"
   },
   {
@@ -58,7 +60,7 @@
     "aliases": ["deli lid", "deli container lid", "container lid"],
     "category": "lids",
     "unit_size": "fits 8-32oz",
-    "case_pack": 500,
+    "case_pack": 550,
     "min_order": 1,
     "supplier": "acme-foodservice"
   },
@@ -203,5 +205,313 @@
     "case_pack": 30,
     "min_order": 1,
     "supplier": "acme-foodservice"
+  },
+  {
+    "sku": "GX-DELI-08",
+    "product_name": "8oz Deli Container",
+    "aliases": ["deli cup", "8 oz deli", "8oz deli container", "soup container small"],
+    "category": "containers",
+    "unit_size": "8oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "companion_skus": ["GX-LID-DELI"],
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-DELI-16",
+    "product_name": "16oz Deli Container",
+    "aliases": ["16 oz deli", "16oz deli container", "pint deli", "soup container medium"],
+    "category": "containers",
+    "unit_size": "16oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "companion_skus": ["GX-LID-DELI"],
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-DELI-32",
+    "product_name": "32oz Deli Container",
+    "aliases": ["32 oz deli", "32oz deli container", "quart deli", "soup container large"],
+    "category": "containers",
+    "unit_size": "32oz",
+    "case_pack": 480,
+    "min_order": 1,
+    "companion_skus": ["GX-LID-DELI"],
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-PCUP-2",
+    "product_name": "2oz Portion Cup",
+    "aliases": ["salsa cup", "souffle cup 2oz", "sauce cup", "portion cup 2oz"],
+    "category": "cups",
+    "unit_size": "2oz",
+    "case_pack": 2500,
+    "min_order": 1,
+    "companion_skus": ["GX-LID-PCUP"],
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-LID-DELI",
+    "product_name": "Deli Container Lid",
+    "aliases": ["deli lid", "deli container lid", "container lid"],
+    "category": "lids",
+    "unit_size": "fits 8-32oz",
+    "case_pack": 550,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-LID-PCUP",
+    "product_name": "Portion Cup Lid",
+    "aliases": ["souffle lid", "portion cup lid", "salsa cup lid"],
+    "category": "lids",
+    "unit_size": "fits 2-4oz",
+    "case_pack": 2500,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-CUP-12",
+    "product_name": "12oz Paper Hot Cup",
+    "aliases": ["coffee cup", "hot cup 12oz", "12 oz hot cup"],
+    "category": "cups",
+    "unit_size": "12oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "companion_skus": ["GX-LID-HOT"],
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-LID-HOT",
+    "product_name": "Hot Cup Lid",
+    "aliases": ["coffee lid", "hot cup lid", "dome lid"],
+    "category": "lids",
+    "unit_size": "fits 10-16oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-GLOVE-M",
+    "product_name": "Nitrile Gloves Medium",
+    "aliases": ["gloves medium", "nitrile gloves m", "medium gloves"],
+    "category": "safety",
+    "unit_size": "medium",
+    "case_pack": 1000,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-STRAW-WRAP",
+    "product_name": "Wrapped Straws",
+    "aliases": ["straws", "wrapped straws", "drinking straws"],
+    "category": "paper",
+    "unit_size": "7.75in",
+    "case_pack": 10000,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-CLAM-9",
+    "product_name": "9in Kraft Clamshell",
+    "aliases": ["clamshell", "kraft clamshell", "takeout box", "to-go box", "hinged container", "9 inch clamshell"],
+    "category": "containers",
+    "unit_size": "9in",
+    "case_pack": 200,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-CLAM-6",
+    "product_name": "6in Kraft Clamshell",
+    "aliases": ["small clamshell", "6 inch clamshell", "kraft clamshell small", "burger box"],
+    "category": "containers",
+    "unit_size": "6in",
+    "case_pack": 300,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-FORK-CPLA",
+    "product_name": "Compostable Forks",
+    "aliases": ["compostable forks", "pla forks", "cornstarch forks", "eco forks", "biodegradable forks"],
+    "category": "utensils",
+    "unit_size": "compostable",
+    "case_pack": 1000,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-PIZZA-14",
+    "product_name": "14in Corrugated Pizza Box",
+    "aliases": ["pizza box", "pizza boxes", "14 inch pizza box", "corrugated pizza box"],
+    "category": "packaging",
+    "unit_size": "14in",
+    "case_pack": 50,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-SKEWER-6",
+    "product_name": "6in Bamboo Skewers",
+    "aliases": ["bamboo skewers", "skewers", "wooden skewers", "kabob sticks"],
+    "category": "utensils",
+    "unit_size": "6in",
+    "case_pack": 5000,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "GX-BPAPER",
+    "product_name": "Butcher Paper Roll",
+    "aliases": ["butcher paper", "kraft paper roll", "freezer paper", "wrapping paper roll"],
+    "category": "wraps",
+    "unit_size": "18in x 1000ft",
+    "case_pack": 1,
+    "min_order": 1,
+    "supplier": "globex-foodservice"
+  },
+  {
+    "sku": "NW-DELI-16",
+    "product_name": "16oz Deli Container",
+    "aliases": ["16 oz deli", "16oz deli container", "pint deli", "soup container medium"],
+    "category": "containers",
+    "unit_size": "16oz",
+    "case_pack": 500,
+    "min_order": 1,
+    "companion_skus": ["NW-LID-DELI"],
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-LID-DELI",
+    "product_name": "Deli Container Lid",
+    "aliases": ["deli lid", "deli container lid", "container lid"],
+    "category": "lids",
+    "unit_size": "fits 8-32oz",
+    "case_pack": 550,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-CUP-12",
+    "product_name": "12oz Paper Hot Cup",
+    "aliases": ["coffee cup", "hot cup 12oz", "12 oz hot cup"],
+    "category": "cups",
+    "unit_size": "12oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "companion_skus": ["NW-LID-HOT"],
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-LID-HOT",
+    "product_name": "Hot Cup Lid",
+    "aliases": ["coffee lid", "hot cup lid", "dome lid"],
+    "category": "lids",
+    "unit_size": "fits 10-16oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-STRAW-WRAP",
+    "product_name": "Wrapped Straws",
+    "aliases": ["straws", "wrapped straws", "drinking straws"],
+    "category": "paper",
+    "unit_size": "7.75in",
+    "case_pack": 10000,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-NAPKIN-1",
+    "product_name": "Dinner Napkins",
+    "aliases": ["napkins", "dinner napkin", "paper napkins"],
+    "category": "paper",
+    "unit_size": "1-ply",
+    "case_pack": 3000,
+    "min_order": 2,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-FOIL-ROLL",
+    "product_name": "Aluminum Foil Roll",
+    "aliases": ["foil", "aluminum foil", "foil roll"],
+    "category": "wraps",
+    "unit_size": "18in x 500ft",
+    "case_pack": 1,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-CUP-16C",
+    "product_name": "16oz Paper Cold Cup",
+    "aliases": ["cold cup 16oz", "16 oz cold cup", "soda cup"],
+    "category": "cups",
+    "unit_size": "16oz",
+    "case_pack": 1000,
+    "min_order": 1,
+    "companion_skus": ["NW-LID-HOT"],
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-CLAM-9",
+    "product_name": "9in Kraft Clamshell",
+    "aliases": ["clamshell", "kraft clamshell", "takeout box", "to-go box", "hinged container", "9 inch clamshell"],
+    "category": "containers",
+    "unit_size": "9in",
+    "case_pack": 200,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-PIZZA-14",
+    "product_name": "14in Corrugated Pizza Box",
+    "aliases": ["pizza box", "pizza boxes", "14 inch pizza box", "corrugated pizza box"],
+    "category": "packaging",
+    "unit_size": "14in",
+    "case_pack": 50,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-LINER-55",
+    "product_name": "55gal Can Liners",
+    "aliases": ["can liners", "trash bags", "garbage bags", "55 gallon liners", "trash can liners"],
+    "category": "janitorial",
+    "unit_size": "55gal",
+    "case_pack": 200,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-SANI-TAB",
+    "product_name": "Sanitizer Tablets",
+    "aliases": ["sanitizer tablets", "sanitizing tablets", "sanitizer", "quat tablets", "sani tabs"],
+    "category": "janitorial",
+    "unit_size": "tablets",
+    "case_pack": 100,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-FILTER-12",
+    "product_name": "12-cup Coffee Filters",
+    "aliases": ["coffee filters", "12 cup filters", "paper filters", "brew filters"],
+    "category": "beverage",
+    "unit_size": "12-cup",
+    "case_pack": 1000,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
+  },
+  {
+    "sku": "NW-HANDTOWEL",
+    "product_name": "Multifold Hand Towels",
+    "aliases": ["hand towels", "multifold towels", "multifold hand towels", "folded paper towels"],
+    "category": "paper",
+    "unit_size": "multifold",
+    "case_pack": 4000,
+    "min_order": 1,
+    "supplier": "northwind-foodservice"
   }
 ]
